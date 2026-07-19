@@ -103,6 +103,22 @@ a{color:#6cb2ff;}
 <!-- ========== 分頁 1：快報 ========== -->
 <section class="tab active" id="tab-sms">
   <div class="card">
+    <h2>0. 這台車能「事後檢舉」嗎？（點選符合的狀況，可複選）</h2>
+    <div class="chips" id="judgeChips">
+      <span class="chip" data-j="ok" data-v="停在人行道上">壓人行道</span>
+      <span class="chip" data-j="ok" data-v="停在行人穿越道上">行人穿越道</span>
+      <span class="chip" data-j="ok" data-v="於交岔路口違規停車">路口10公尺內</span>
+      <span class="chip" data-j="ok" data-v="於公車站違規停車">公車站10公尺內</span>
+      <span class="chip" data-j="ok" data-v="於消防栓5公尺內違規停車">消防栓5公尺內</span>
+      <span class="chip" data-j="ok" data-v="占用身心障礙停車位">身障車位</span>
+      <span class="chip" data-j="ok" data-v="併排停車">併排停車</span>
+      <span class="chip" data-j="no" data-v="紅線違規停車，阻礙車流">純紅黃線</span>
+      <span class="chip" data-j="no" data-v="占用機車停車格">占用機車格</span>
+    </div>
+    <div class="big-note" id="judgeResult" style="display:none"></div>
+  </div>
+
+  <div class="card">
     <h2>1. 位置（自動定位）</h2>
     <div class="row" style="margin-bottom:8px">
       <span class="status" id="geoStatus">尚未定位</span>
@@ -136,10 +152,17 @@ a{color:#6cb2ff;}
       <span class="chip" data-v="停在行人穿越道上">行人穿越道</span>
       <span class="chip" data-v="於交岔路口違規停車">交岔路口</span>
       <span class="chip" data-v="於公車站違規停車">公車站</span>
+      <span class="chip" data-v="於消防栓5公尺內違規停車">消防栓</span>
       <span class="chip" data-v="紅線違規停車，阻礙車流">紅線擋道</span>
       <span class="chip" data-v="__other__">其他…</span>
     </div>
     <input type="text" id="violationOther" placeholder="自行描述違規事實" style="display:none; margin-top:8px">
+    <label class="small">車內狀態（無人熄火＝警察來得及，成功率高）</label>
+    <div class="chips" id="stateChips">
+      <span class="chip on" data-v="">不確定</span>
+      <span class="chip" data-v="車內無人且已熄火，">車內無人</span>
+      <span class="chip" data-v="駕駛在車上，">駕駛在車上</span>
+    </div>
   </div>
 
   <div class="card">
@@ -237,6 +260,28 @@ a{color:#6cb2ff;}
       <a href="https://policemail.kcg.gov.tw/" target="_blank" rel="noopener">高雄市 警政信箱（交通違規檢舉）</a>
       <a href="https://www.google.com/maps" target="_blank" rel="noopener">🗺 Google 地圖（確認門牌地址）</a>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>防「白跑一趟」戰術</h2>
+    <ul class="tight">
+      <li><b>順序永遠是：先錄影，再報案。</b>證據在按下錄影那一刻就鎖死——只要屬於可檢舉項目，車開走了照樣吃單。</li>
+      <li><b>紅線不一定只是紅線</b>：離路口 10 公尺內？壓到人行道？公車站 10 公尺內？逼得別人像併排？消防栓 5 公尺內？只要沾到一項就升級成「可事後檢舉」。錄影時把路口、站牌、行穿線這些參照物刻意拍進去。</li>
+      <li><b>熄火無人、蓋車罩</b>的車 → 簡訊報案並註明「車內無人」，警察來得及開單甚至拖吊。</li>
+      <li><b>外送、上下客那種 30 秒就走</b>的 → 別等警察，直接錄影事後檢舉（限可檢舉項目）；純紅黃線就隨緣，報案本身已達到逼車移走的效果。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>常態違停點：陳情治本</h2>
+    <p class="hint" style="margin-top:0">每天都違停的固定地點（巷口、被汽車占的機車格），單次檢舉是打地鼠。向市政府陳情要求劃設「違停科技執法」或列入加強取締路段，一支自動偵測桿裝下去就永久淨空。</p>
+    <div class="linklist">
+      <a href="tel:1999">☎️ 撥打 1999 市民熱線陳情</a>
+    </div>
+    <details>
+      <summary>陳情內容範例</summary>
+      <p class="hint">「○○區○○路○段○號前（或○○路口）長期有車輛違規停車，阻礙機車與行人通行，已多次報案仍反覆發生，建請貴府評估於該處設置違規停車科技執法設備，或列入警方加強取締路段。」</p>
+    </details>
   </div>
 
   <div class="card">
@@ -377,6 +422,31 @@ bindChips("violationChips", v => {
   buildSms();
 });
 $("violationOther").addEventListener("input", e => { violation = e.target.value || "違規停車"; buildSms(); });
+let carState = "";
+bindChips("stateChips", v => { carState = v; buildSms(); });
+
+/* ---------- 事後檢舉判斷器 ---------- */
+const judgeBox = $("judgeChips");
+judgeBox.addEventListener("click", e => {
+  const c = e.target.closest(".chip");
+  if (!c) return;
+  c.classList.toggle("on");
+  const on = [...judgeBox.querySelectorAll(".chip.on")];
+  const res = $("judgeResult");
+  if (!on.length){ res.style.display = "none"; return; }
+  res.style.display = "block";
+  const reportable = on.filter(x => x.dataset.j === "ok");
+  const pick = (reportable[0] || on[0]).dataset.v;
+  const chip = document.querySelector(`#violationChips .chip[data-v="${pick}"]`);
+  if (chip) chip.click();                       // 自動帶入下方違規事實
+  if (reportable.length){
+    res.innerHTML = `✅ <b>可事後檢舉</b>——先錄影 10 秒（環景帶到路口/站牌/門牌 → 車牌特寫 → 車內無人），` +
+      `就算他馬上開走，7 天內上傳官方系統照樣開罰。已帶入下方違規事實；建議同時傳簡訊雙保險。`;
+  } else {
+    res.innerHTML = `⚠️ <b>不在民眾事後檢舉範圍</b>——只能靠警察現場開單。` +
+      `車內無人已熄火 → 立刻傳簡訊，警察來得及；隨時會開走的 → 就當報案逼他移車，別執著。`;
+  }
+});
 
 /* ---------- 簡訊組合 ---------- */
 let smsEdited = false;
@@ -391,7 +461,7 @@ function buildSms(){
   if (smsEdited) return;
   const addr = $("address").value.trim() || "（地址）";
   const plate = $("plate").value.trim().toUpperCase() || "（車牌）";
-  $("smsBody").value = `${nowHM()}，在${addr}，車牌 ${plate} 之${vehicle}${violation}，阻礙交通，請派員處理。`;
+  $("smsBody").value = `${nowHM()}，在${addr}，車牌 ${plate} 之${vehicle}${violation}，${carState}阻礙交通，請派員處理。`;
 }
 buildSms();
 setInterval(() => { if (!smsEdited) buildSms(); }, 30000);
@@ -423,7 +493,7 @@ function buildReportBody(){
 `違規時間：${date} ${nowHM()}
 違規地點：${addr}
 車牌號碼：${plate}（${vehicle}）
-違規事實：${violation}，如附件照片/影片所示。
+違規事實：${violation}，${carState || ""}如附件照片/影片所示。
 檢附證據可清楚辨識車牌、地點與違規事實，請依法舉發。`;
 }
 $("btnCopyReport").onclick = () => copyText($("reportBody").value);
@@ -549,7 +619,9 @@ function addResult(container, blob, filename, kind, metaText){
       <div class="btnrow">
         <button class="btn secondary act-dl">⬇️ 下載</button>
         <button class="btn secondary act-share">📤 分享/儲存</button>
+        <button class="btn secondary act-report">📄 前往檢舉</button>
       </div></div>`;
+  item.querySelector(".act-report").onclick = () => { switchTab("tab-info"); window.scrollTo(0, 0); };
   item.querySelector(".act-dl").onclick = () => {
     const a = document.createElement("a");
     a.href = url; a.download = filename;
