@@ -103,6 +103,17 @@ a{color:#6cb2ff;}
 <!-- ========== 分頁 1：快報 ========== -->
 <section class="tab active" id="tab-sms">
   <div class="card">
+    <h2>🎤 語音填單（唸一句，車牌／違規／地點自動填）</h2>
+    <button class="btn primary" id="btnVoice" style="margin-top:0">🎤 開始說話</button>
+    <div class="row" style="margin-top:8px">
+      <input type="text" id="voiceText" placeholder="或打字／鍵盤聽寫後按填入" autocomplete="off">
+      <button class="btn mini secondary" id="btnParseVoice" style="flex:0 0 auto">填入</button>
+    </div>
+    <div class="status" id="voiceStatus" style="margin-top:6px"></div>
+    <div class="hint" id="voiceHint">例：「車牌 ABC 1234 汽車併排停車 車內無人」、「和平東路二段96號 機車格被汽車占用」。</div>
+  </div>
+
+  <div class="card">
     <h2>0. 這台車能「事後檢舉」嗎？（點選符合的狀況，可複選）</h2>
     <div class="chips" id="judgeChips">
       <span class="chip" data-j="ok" data-v="停在人行道上">壓人行道</span>
@@ -395,6 +406,7 @@ function toast(msg){
 
 /* ---------- 定位 + 轉地址 ---------- */
 let lastPos = null;
+let addrLocked = false;   // 網址參數／語音／手動輸入過地址後，自動定位不再覆蓋
 function locate(){
   const st = $("geoStatus");
   if (!navigator.geolocation){ st.textContent = "此瀏覽器不支援定位"; st.className = "status err"; return; }
@@ -417,7 +429,7 @@ function locate(){
       const no = a.house_number ? a.house_number.replace(/號?$/, "號") : "";
       let addr = [city, dist, road, no].join("");
       if (!road) addr = j.display_name || addr;
-      if (addr){
+      if (addr && !addrLocked){
         $("address").value = addr + (no ? "前" : "");
         buildSms();
       }
@@ -430,7 +442,8 @@ function locate(){
     st.className = "status err";
   }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
 }
-$("btnLocate").onclick = locate;
+$("btnLocate").onclick = () => { addrLocked = false; locate(); };  // 手動重新定位＝要求覆蓋
+$("address").addEventListener("input", e => { if (e.isTrusted) addrLocked = true; });
 
 /* ---------- chips ---------- */
 function bindChips(containerId, onChange){
@@ -766,7 +779,150 @@ $("btnProcessVideo").onclick = async () => {
   raf = requestAnimationFrame(paint);
 };
 
+/* ---------- 語音填單＋網址參數（方案 A） ---------- */
+function setChipOn(containerId, v){
+  const box = $(containerId);
+  const chip = box.querySelector(`.chip[data-v="${CSS.escape(v)}"]`);
+  if (!chip) return false;
+  box.querySelectorAll(".chip").forEach(x => x.classList.remove("on"));
+  chip.classList.add("on");
+  return true;
+}
+function setViolation(v){
+  const other = $("violationOther");
+  if (setChipOn("violationChips", v)){ other.style.display = "none"; violation = v; }
+  else {
+    setChipOn("violationChips", "__other__");
+    other.style.display = "block"; other.value = v; violation = v;
+  }
+  buildSms();
+}
+function setVehicle(v){ if (setChipOn("vehicleChips", v)){ vehicle = v; buildSms(); } }
+function setCarState(v){ if (setChipOn("stateChips", v)){ carState = v; buildSms(); } }
+
+const VIO_KEYWORDS = [
+  ["併排", "併排停車"],
+  ["人行道", "停在人行道上"],
+  ["行人穿越道", "停在行人穿越道上"], ["行穿", "停在行人穿越道上"], ["斑馬線", "停在行人穿越道上"],
+  ["機車格", "占用機車停車格"], ["機車位", "占用機車停車格"], ["機車停車格", "占用機車停車格"],
+  ["身心障礙", "占用身心障礙停車位"], ["身障", "占用身心障礙停車位"], ["殘障", "占用身心障礙停車位"],
+  ["公車站", "於公車站違規停車"], ["站牌", "於公車站違規停車"],
+  ["消防栓", "於消防栓5公尺內違規停車"],
+  ["交岔路口", "於交岔路口違規停車"], ["路口", "於交岔路口違規停車"],
+  ["出入口", "擋住車輛出入口"], ["車道口", "擋住車輛出入口"],
+  ["紅線", "紅線違規停車，阻礙車流"], ["黃線", "紅線違規停車，阻礙車流"],
+];
+function matchViolation(text){
+  for (const [k, v] of VIO_KEYWORDS) if (text.includes(k)) return v;
+  return null;
+}
+function toHalfWidth(s){
+  return s.replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+}
+function extractPlate(text){
+  const t = toHalfWidth(text).toUpperCase().replace(/[\s\-—–－.．,，、]/g, "");
+  const m = t.match(/([A-Z]{2,3})(\d{3,4})|(\d{3,4})([A-Z]{2,3})/);
+  if (!m) return null;
+  return m[1] ? `${m[1]}-${m[2]}` : `${m[3]}-${m[4]}`;
+}
+function extractAddress(text){
+  const m = text.match(/[一-龥]{1,10}?(?:路|街|大道)(?:[一二三四五六七八九十\d]{1,3}段)?(?:\d{1,4}巷)?(?:\d{1,3}弄)?(?:\d{1,5}號)?/);
+  if (!m) return null;
+  const a = m[0];
+  if (/^(交岔路|馬路|走路|讓路|叉路)/.test(a)) return null;               // 排除誤抓的一般詞
+  if (!/[號段巷]/.test(a) && a.length < 4) return null;                    // 太短又沒門牌，不可信
+  return /號$/.test(a) ? a + "前" : a;
+}
+function parseFill(text){
+  if (!text || !text.trim()) return;
+  const filled = [];
+  const plate = extractPlate(text);
+  if (plate){ $("plate").value = plate; filled.push("車牌 " + plate); }
+  if (/機車(?![格位停])|摩托車/.test(text)){ setVehicle("機車"); filled.push("車種：機車"); }
+  else if (/貨車|卡車/.test(text)){ setVehicle("貨車"); filled.push("車種：貨車"); }
+  else if (/汽車|轎車|休旅|小客車/.test(text)){ setVehicle("自小客車"); filled.push("車種：汽車"); }
+  const vio = matchViolation(text);
+  if (vio){ setViolation(vio); filled.push("違規：" + vio); }
+  if (/無人|熄火/.test(text)){ setCarState("車內無人且已熄火，"); filled.push("車內無人"); }
+  else if (/駕駛在|有人/.test(text)){ setCarState("駕駛在車上，"); filled.push("駕駛在車上"); }
+  const addr = extractAddress(text);
+  if (addr){ $("address").value = addr; addrLocked = true; filled.push("地點 " + addr); }
+  buildSms();
+  const st = $("voiceStatus");
+  if (filled.length){ st.textContent = "✅ 已填入：" + filled.join("、"); st.className = "status ok"; }
+  else { st.textContent = "沒抓到車牌或違規項目，請再唸一次或直接手動輸入"; st.className = "status err"; }
+}
+$("btnParseVoice").onclick = () => parseFill($("voiceText").value);
+$("voiceText").addEventListener("keydown", e => { if (e.key === "Enter") parseFill($("voiceText").value); });
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR){
+  $("btnVoice").style.display = "none";
+  $("voiceHint").textContent =
+    "此瀏覽器不支援語音辨識（iPhone Safari 目前不支援）。改用：點上方輸入框 → 鍵盤的🎤聽寫唸一句 → 按「填入」，效果相同。";
+} else {
+  let recog = null, listening = false;
+  $("btnVoice").onclick = () => {
+    if (listening){ recog.stop(); return; }
+    recog = new SR();
+    recog.lang = "zh-TW";
+    recog.interimResults = true;
+    let heard = "";
+    recog.onresult = e => {
+      let t = "";
+      for (const r of e.results) t += r[0].transcript;
+      heard = t;
+      $("voiceText").value = t;
+    };
+    recog.onend = () => {
+      listening = false;
+      $("btnVoice").textContent = "🎤 開始說話";
+      if (heard.trim()) parseFill(heard);
+    };
+    recog.onerror = e => {
+      const st = $("voiceStatus");
+      st.textContent = e.error === "not-allowed" ? "請允許麥克風權限後再試" : "語音辨識失敗：" + e.error;
+      st.className = "status err";
+    };
+    recog.start();
+    listening = true;
+    $("btnVoice").textContent = "🛑 說完自動停（按此立即停止）";
+    $("voiceStatus").textContent = "聆聽中…請說：車牌、車種、違規、地點";
+    $("voiceStatus").className = "status";
+  };
+}
+
+/* 網址參數自動填單：?plate= &vio= &addr= &state= &vtype= &say=（給捷徑／語音助理／Bot 連結用） */
+function applyUrlParams(){
+  const q = new URLSearchParams(location.search);
+  if (![...q.keys()].length) return;
+  const say = q.get("say");
+  if (say){ $("voiceText").value = say; parseFill(say); }
+  const plate = q.get("plate");
+  if (plate) $("plate").value = extractPlate(plate) || toHalfWidth(plate).toUpperCase();
+  const addr = q.get("addr");
+  if (addr){ $("address").value = addr; addrLocked = true; }
+  const vt = q.get("vtype");
+  if (vt){
+    if (/機車/.test(vt)) setVehicle("機車");
+    else if (/貨/.test(vt)) setVehicle("貨車");
+    else if (/汽|轎|客/.test(vt)) setVehicle("自小客車");
+  }
+  const vio = q.get("vio");
+  if (vio){
+    const exact = document.querySelector(`#violationChips .chip[data-v="${CSS.escape(vio)}"]`);
+    setViolation(exact ? vio : (matchViolation(vio) || vio));
+  }
+  const state = q.get("state");
+  if (state){
+    if (/無人|熄火/.test(state)) setCarState("車內無人且已熄火，");
+    else if (/有人|駕駛/.test(state)) setCarState("駕駛在車上，");
+  }
+  buildSms();
+}
+
 /* ---------- 啟動 ---------- */
+applyUrlParams();
 locate();
 if ("serviceWorker" in navigator)
   navigator.serviceWorker.register("sw.js").catch(() => {});
