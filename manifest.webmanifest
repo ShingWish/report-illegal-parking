@@ -1,7 +1,8 @@
 {
-  "name": "違停快報",
-  "short_name": "違停快報",
-  "description": "快速產生違規停車報案簡訊、照片浮水印與影片壓縮工具",
+  "name": "鯨察快報",
+  "short_name": "鯨察快報",
+  "description": "拍照存證、語音填單、一鍵簡訊報案的違規停車檢舉工具",
+  "lang": "zh-Hant-TW",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

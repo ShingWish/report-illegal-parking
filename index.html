@@ -3,13 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>違停快報</title>
-<meta name="description" content="快速產生違規停車報案簡訊、照片浮水印與影片壓縮工具">
+<title>鯨察快報｜違規停車檢舉工具：拍照存證、語音填單、一鍵簡訊報案</title>
+<meta name="description" content="鯨察快報：台灣機車族的違規停車檢舉工具。拍照浮水印存證、一句話語音填單、GPS 自動依縣市選擇警察局簡訊報案專線一鍵送出；另有行車紀錄器影片剪輯壓縮、事後檢舉範本與 7 天期限追蹤。免安裝純網頁，所有資料只存在你的手機。">
+<meta name="keywords" content="違規停車,檢舉,違停,報案簡訊,併排停車,人行道停車,紅線停車,交通違規檢舉,鯨察快報">
+<link rel="canonical" href="https://shingwish.github.io/report-illegal-parking/">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="鯨察快報">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#d33a2c">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="鯨察快報">
+<meta property="og:title" content="鯨察快報｜違規停車檢舉工具">
+<meta property="og:description" content="拍照存證、語音填單、一鍵簡訊報案——台灣機車族的違停檢舉工具，免安裝、資料只存手機。">
+<meta property="og:url" content="https://shingwish.github.io/report-illegal-parking/">
+<meta property="og:image" content="https://shingwish.github.io/report-illegal-parking/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="zh_TW">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="鯨察快報｜違規停車檢舉工具">
+<meta name="twitter:description" content="拍照存證、語音填單、一鍵簡訊報案——台灣機車族的違停檢舉工具。">
+<meta name="twitter:image" content="https://shingwish.github.io/report-illegal-parking/og-image.png">
 <style>
 :root{
   --bg:#111418; --card:#1c2128; --card2:#242b33; --text:#e8eaed; --muted:#9aa4af;
@@ -29,8 +47,7 @@ header{position:sticky; top:0; z-index:10; background:var(--bg);
   padding:calc(10px + env(safe-area-inset-top)) 16px 8px; display:flex; align-items:center; gap:8px;
   border-bottom:1px solid var(--border);}
 header h1{font-size:18px; margin:0; flex:1; font-weight:700;}
-header .logo{width:26px;height:26px;border-radius:7px;background:var(--accent);color:#fff;
-  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;}
+header .logo{width:26px;height:26px;border-radius:7px;display:block;}
 main{padding:12px; max-width:560px; margin:0 auto;}
 section.tab{display:none;}
 section.tab.active{display:block;}
@@ -91,11 +108,27 @@ a{color:#6cb2ff;}
   opacity:0; transition:opacity .25s; pointer-events:none; z-index:50;}
 .copied-toast.show{opacity:1;}
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "鯨察快報",
+  "alternateName": "Report Illegal Parking",
+  "url": "https://shingwish.github.io/report-illegal-parking/",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires JavaScript",
+  "inLanguage": "zh-Hant-TW",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TWD" },
+  "description": "台灣機車族的違規停車檢舉工具：拍照浮水印存證、語音填單、GPS 依縣市自動選擇警察局簡訊報案專線、一鍵送出報案簡訊，並提供行車紀錄器影片剪輯壓縮與事後檢舉範本。"
+}
+</script>
 </head>
 <body>
 <header>
-  <div class="logo">停</div>
-  <h1>違停快報</h1>
+  <img class="logo" src="favicon-48.png" alt="鯨察快報 logo" width="26" height="26">
+  <h1>鯨察快報</h1>
   <button class="btn mini secondary" id="btnSettings">⚙︎</button>
 </header>
 
