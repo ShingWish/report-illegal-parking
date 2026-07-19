@@ -179,7 +179,8 @@ a{color:#6cb2ff;}
   <div class="card">
     <h2>4. 簡訊內容（可修改）</h2>
     <textarea id="smsBody"></textarea>
-    <button class="btn primary" id="btnSms">📨 開啟簡訊報案（0911-510-110）</button>
+    <button class="btn primary" id="btnSms">📨 開啟簡訊報案</button>
+    <div class="status" id="smsTargetHint" style="margin-top:6px"></div>
     <div class="btnrow" style="margin-top:8px">
       <button class="btn secondary" id="btnCopy">📋 複製內容</button>
       <button class="btn secondary" id="btnCall">☎️ 撥打 110</button>
@@ -349,8 +350,8 @@ a{color:#6cb2ff;}
 <section class="tab" id="tab-settings">
   <div class="card">
     <h2>設定</h2>
-    <label class="small">簡訊報案號碼（全國共用 0911-510-110，一般不需修改）</label>
-    <input type="text" id="setSmsNumber" inputmode="tel">
+    <label class="small">簡訊報案號碼（留空＝自動依定位選擇所在縣市的專線，建議留空）</label>
+    <input type="text" id="setSmsNumber" inputmode="tel" placeholder="自動（依定位判斷縣市）">
     <button class="btn secondary" id="btnSaveSettings">儲存</button>
     <div class="hint">所有資料只儲存在你手機的瀏覽器中，不會上傳到任何伺服器。定位轉地址使用 OpenStreetMap Nominatim 公開服務（只傳送座標）。</div>
   </div>
@@ -374,13 +375,15 @@ const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
 
 /* ---------- 設定 ---------- */
 const SETTINGS_KEY = "wtkb.settings";
-let settings = { smsNumber: "0911510110" };
+let settings = { smsNumber: "", lastCounty: "", lastSmsNumber: "" };
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch(e){}
+if (settings.smsNumber === "0911510110") settings.smsNumber = "";   // 舊版誤植的「全國統一號碼」→ 改為自動
 $("setSmsNumber").value = settings.smsNumber;
 $("btnSaveSettings").onclick = () => {
-  settings.smsNumber = $("setSmsNumber").value.replace(/[^0-9+]/g, "") || "0911510110";
+  settings.smsNumber = $("setSmsNumber").value.replace(/[^0-9+]/g, "");
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  toast("已儲存");
+  updateSmsUi();
+  toast(settings.smsNumber ? "已儲存自訂號碼" : "已設為自動依定位選擇");
   switchTab("tab-sms");
 };
 $("btnSettings").onclick = () => switchTab("tab-settings");
@@ -404,6 +407,45 @@ function toast(msg){
   toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
 }
 
+/* ---------- 各縣市手機簡訊報案專線（警政署勤指中心公告，更新日期 114-07-28） ---------- */
+const COUNTY_SMS = {
+  "臺北市": "0911510914", "新北市": "0911510105", "桃園市": "0917110880", "臺中市": "0911510915",
+  "臺南市": "0911510916", "高雄市": "0911510917", "基隆市": "0911510918", "新竹市": "0911510919",
+  "嘉義市": "0911510920", "新竹縣": "0911510921", "苗栗縣": "0911510922", "彰化縣": "0911510933",
+  "南投縣": "0911510923", "雲林縣": "0911510924", "嘉義縣": "0911510925", "屏東縣": "0911510926",
+  "宜蘭縣": "0911510927", "花蓮縣": "0911510928", "臺東縣": "0911510929", "澎湖縣": "0911510930",
+  "金門縣": "0911510931", "連江縣": "0911510932",
+};
+let autoSms = null;   // { county, number }，由定位反查結果判斷
+function fmtSmsNum(n){ return /^09\d{8}$/.test(n) ? `${n.slice(0,4)}-${n.slice(4,7)}-${n.slice(7)}` : n; }
+function detectCounty(a, displayName){
+  // 縣轄市（竹北市、員林市…）會出現在 a.city，所以每個候選值都要逐一比對到縣市表為止
+  for (const cand of [a.city, a.county, a.state, displayName]){
+    if (!cand) continue;
+    const c = cand.replace(/台/g, "臺");
+    for (const county in COUNTY_SMS) if (c.includes(county)) return county;
+  }
+  return null;
+}
+function smsTarget(){
+  if (settings.smsNumber) return { num: settings.smsNumber, custom: true };
+  if (autoSms) return { num: autoSms.number, label: autoSms.county };
+  if (settings.lastSmsNumber) return { num: settings.lastSmsNumber, label: settings.lastCounty + "（依上次定位）" };
+  return null;
+}
+function updateSmsUi(){
+  const t = smsTarget(), st = $("smsTargetHint");
+  if (t){
+    $("btnSms").textContent = `📨 開啟簡訊報案（${fmtSmsNum(t.num)}）`;
+    st.textContent = t.custom ? "收件號碼：設定頁的自訂號碼" : `收件單位：${t.label}警察局簡訊報案專線`;
+    st.className = "status ok";
+  } else {
+    $("btnSms").textContent = "📨 開啟簡訊報案";
+    st.textContent = "各縣市簡訊專線不同——定位成功後自動選擇，或到設定手動輸入。";
+    st.className = "status";
+  }
+}
+
 /* ---------- 定位 + 轉地址 ---------- */
 let lastPos = null;
 let addrLocked = false;   // 網址參數／語音／手動輸入過地址後，自動定位不再覆蓋
@@ -423,6 +465,14 @@ function locate(){
         { headers: { "Accept": "application/json" } });
       const j = await r.json();
       const a = j.address || {};
+      const county = detectCounty(a, j.display_name || "");
+      if (county){
+        autoSms = { county, number: COUNTY_SMS[county] };
+        settings.lastCounty = county;
+        settings.lastSmsNumber = autoSms.number;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      }
+      updateSmsUi();
       const city = a.city || a.county || "";
       const dist = a.suburb || a.city_district || a.town || a.village || "";
       const road = a.road || "";
@@ -510,9 +560,11 @@ buildSms();
 setInterval(() => { if (!smsEdited) buildSms(); }, 30000);
 
 $("btnSms").onclick = () => {
+  const t = smsTarget();
+  if (!t){ toast("還不知道你在哪個縣市：請先定位，或到設定輸入專線號碼"); return; }
   const body = encodeURIComponent($("smsBody").value);
   const sep = IS_IOS ? "&" : "?";
-  location.href = `sms:${settings.smsNumber}${sep}body=${body}`;
+  location.href = `sms:${t.num}${sep}body=${body}`;
 };
 $("btnCall").onclick = () => { location.href = "tel:110"; };
 $("btnCopy").onclick = () => copyText($("smsBody").value);
@@ -923,6 +975,7 @@ function applyUrlParams(){
 
 /* ---------- 啟動 ---------- */
 applyUrlParams();
+updateSmsUi();
 locate();
 if ("serviceWorker" in navigator)
   navigator.serviceWorker.register("sw.js").catch(() => {});
