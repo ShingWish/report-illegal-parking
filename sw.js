@@ -1,4 +1,4 @@
-const CACHE = "wtkb-v8";
+const CACHE = "wtkb-v9";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {

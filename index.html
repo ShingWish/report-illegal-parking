@@ -1152,9 +1152,9 @@ async function aiParse(text){
       const headers = { "content-type": "application/json", "authorization": "Bearer " + key };
       const body = { model, messages: [{ role: "user", content: prompt }] };
       if (p === "openai") body.response_format = { type: "json_object" };
-      else {   // OpenRouter：帶識別 header；response_format 不是每個模型都支援，改靠 prompt 要求 JSON
+      else {   // OpenRouter：帶識別 header（限 ISO-8859-1，不能放中文）；response_format 不是每個模型都支援，改靠 prompt 要求 JSON
         headers["HTTP-Referer"] = location.origin;
-        headers["X-Title"] = "違停快報";
+        headers["X-Title"] = "report-illegal-parking";
       }
       const r = await fetch(url, { method: "POST", signal: ctrl.signal, headers, body: JSON.stringify(body) });
       if (!r.ok) throw new Error("HTTP " + r.status);
