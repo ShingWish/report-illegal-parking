@@ -103,6 +103,17 @@ a{color:#6cb2ff;}
 <!-- ========== 分頁 1：快報 ========== -->
 <section class="tab active" id="tab-sms">
   <div class="card">
+    <h2>第一步永遠是：先拍再報</h2>
+    <div class="btnrow" style="margin-top:0">
+      <button class="btn primary" id="btnQuickPhoto">📷 拍照存證</button>
+      <button class="btn primary" id="btnQuickVideo">🎥 錄影存證</button>
+    </div>
+    <div class="hint">拍完自動進照片/影片分頁加浮水印、壓縮。錄影記得帶到路口、站牌、行穿線等參照物＋車牌特寫。</div>
+    <input type="file" id="quickPhotoInput" accept="image/*" capture="environment" multiple style="display:none">
+    <input type="file" id="quickVideoInput" accept="video/*" capture="environment" style="display:none">
+  </div>
+
+  <div class="card">
     <h2>🎤 語音填單（唸一句，車牌／違規／地點自動填）</h2>
     <button class="btn primary" id="btnVoice" style="margin-top:0">🎤 開始說話</button>
     <div class="row" style="margin-top:8px">
@@ -114,8 +125,9 @@ a{color:#6cb2ff;}
   </div>
 
   <div class="card">
-    <h2>0. 這台車能「事後檢舉」嗎？（點選符合的狀況，可複選）</h2>
-    <div class="chips" id="judgeChips">
+    <details id="judgeDetails">
+      <summary>這台車能「事後檢舉」嗎？（不確定就點開勾選，可複選）</summary>
+      <div class="chips" id="judgeChips" style="margin-top:10px">
       <span class="chip" data-j="ok" data-v="停在人行道上">壓人行道</span>
       <span class="chip" data-j="ok" data-v="停在行人穿越道上">行人穿越道</span>
       <span class="chip" data-j="ok" data-v="於交岔路口違規停車">路口10公尺內</span>
@@ -125,8 +137,9 @@ a{color:#6cb2ff;}
       <span class="chip" data-j="ok" data-v="併排停車">併排停車</span>
       <span class="chip" data-j="no" data-v="紅線違規停車，阻礙車流">純紅黃線</span>
       <span class="chip" data-j="no" data-v="占用機車停車格">占用機車格</span>
-    </div>
-    <div class="big-note" id="judgeResult" style="display:none"></div>
+      </div>
+      <div class="big-note" id="judgeResult" style="display:none"></div>
+    </details>
   </div>
 
   <div class="card">
@@ -179,6 +192,7 @@ a{color:#6cb2ff;}
   <div class="card">
     <h2>4. 簡訊內容（可修改）</h2>
     <textarea id="smsBody"></textarea>
+    <div class="hint" id="smsCount" style="margin-top:4px"></div>
     <button class="btn primary" id="btnSms">📨 開啟簡訊報案</button>
     <div class="status" id="smsTargetHint" style="margin-top:6px"></div>
     <div class="btnrow" style="margin-top:8px">
@@ -245,7 +259,7 @@ a{color:#6cb2ff;}
     <button class="btn primary" id="btnProcessVideo">✂️ 剪輯並壓縮</button>
     <div id="videoProgWrap" style="display:none; margin-top:10px">
       <progress id="videoProg" max="100" value="0"></progress>
-      <div class="hint" id="videoProgText">處理中…請保持此頁面開啟，勿切換 App。</div>
+      <div class="hint" id="videoProgText">處理中…轉檔需要與片段等長的時間，請保持此頁面開啟。</div>
     </div>
   </div>
   <div id="videoResults"></div>
@@ -261,6 +275,12 @@ a{color:#6cb2ff;}
   </div>
 
   <div class="card">
+    <h2>報案紀錄（自動追蹤 7 天檢舉期限）</h2>
+    <p class="hint" style="margin-top:0">每次按「開啟簡訊報案」自動記一筆，只存在你的手機。要補官方事後檢舉的，期限內點「帶入檢舉範本」。</p>
+    <div id="recordList"></div>
+  </div>
+
+  <div class="card">
     <h2>檢舉管道</h2>
     <div class="linklist" id="linkList">
       <a href="https://fixtw.com" target="_blank" rel="noopener">⚡ FixTW 自動化檢舉（免費，代填各縣市系統）</a>
@@ -272,6 +292,7 @@ a{color:#6cb2ff;}
       <a href="https://policemail.kcg.gov.tw/" target="_blank" rel="noopener">高雄市 警政信箱（交通違規檢舉）</a>
       <a href="https://www.google.com/maps" target="_blank" rel="noopener">🗺 Google 地圖（確認門牌地址）</a>
     </div>
+    <div class="hint">六都以外縣市：用最上面的 FixTW 代填（支援全國），或搜尋「○○縣警察局 交通違規檢舉」進官方系統。</div>
   </div>
 
   <div class="card">
@@ -373,6 +394,120 @@ const $ = id => document.getElementById(id);
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
+/* ========== PURE-START：純函式區（test/parse.test.js 抽取本區做單元測試；此區禁止碰 DOM） ========== */
+
+/* 各縣市手機簡訊報案專線（警政署勤指中心公告，更新日期 114-07-28） */
+const COUNTY_SMS = {
+  "臺北市": "0911510914", "新北市": "0911510105", "桃園市": "0917110880", "臺中市": "0911510915",
+  "臺南市": "0911510916", "高雄市": "0911510917", "基隆市": "0911510918", "新竹市": "0911510919",
+  "嘉義市": "0911510920", "新竹縣": "0911510921", "苗栗縣": "0911510922", "彰化縣": "0911510933",
+  "南投縣": "0911510923", "雲林縣": "0911510924", "嘉義縣": "0911510925", "屏東縣": "0911510926",
+  "宜蘭縣": "0911510927", "花蓮縣": "0911510928", "臺東縣": "0911510929", "澎湖縣": "0911510930",
+  "金門縣": "0911510931", "連江縣": "0911510932",
+};
+/* 各縣市代表點（中心＋外圍鄉鎮）。沒網路時以最近點判斷縣市——邊界精度有限，線上反查成功後會覆蓋 */
+const COUNTY_SEEDS = [
+  ["臺北市",25.04,121.55],
+  ["新北市",25.01,121.46],["新北市",25.17,121.44],["新北市",25.11,121.81],["新北市",24.93,121.37],["新北市",24.93,121.54],
+  ["基隆市",25.13,121.74],
+  ["桃園市",24.99,121.30],["桃園市",24.96,121.22],["桃園市",24.70,121.35],
+  ["新竹市",24.80,120.97],
+  ["新竹縣",24.84,121.01],["新竹縣",24.73,121.09],["新竹縣",24.58,121.25],
+  ["苗栗縣",24.56,120.82],["苗栗縣",24.69,120.90],["苗栗縣",24.44,121.00],
+  ["臺中市",24.15,120.66],["臺中市",24.25,120.72],["臺中市",24.35,120.62],["臺中市",24.25,121.00],
+  ["彰化縣",24.08,120.54],["彰化縣",23.96,120.57],["彰化縣",23.90,120.37],
+  ["南投縣",23.90,120.68],["南投縣",23.97,120.96],["南投縣",23.76,120.68],["南投縣",23.70,120.85],
+  ["雲林縣",23.71,120.54],["雲林縣",23.71,120.43],["雲林縣",23.57,120.30],
+  ["嘉義市",23.48,120.44],
+  ["嘉義縣",23.46,120.33],["嘉義縣",23.46,120.25],["嘉義縣",23.55,120.43],["嘉義縣",23.47,120.70],
+  ["臺南市",22.99,120.21],["臺南市",23.31,120.32],["臺南市",23.12,120.46],
+  ["高雄市",22.62,120.30],["高雄市",22.80,120.30],["高雄市",22.89,120.48],["高雄市",23.10,120.70],
+  ["屏東縣",22.67,120.49],["屏東縣",22.55,120.54],["屏東縣",22.00,120.74],["屏東縣",22.75,120.73],
+  ["宜蘭縣",24.75,121.75],["宜蘭縣",24.68,121.77],["宜蘭縣",24.60,121.50],
+  ["花蓮縣",23.98,121.60],["花蓮縣",23.33,121.31],["花蓮縣",23.70,121.42],
+  ["臺東縣",22.75,121.15],["臺東縣",23.10,121.37],["臺東縣",22.36,120.90],["臺東縣",23.05,121.16],
+  ["澎湖縣",23.57,119.58],
+  ["金門縣",24.44,118.32],
+  ["連江縣",26.16,119.95],
+];
+function countyFromCoords(lat, lon){
+  let best = null, bestD = Infinity;
+  for (const [county, la, lo] of COUNTY_SEEDS){
+    const dx = (lon - lo) * 101.8, dy = (lat - la) * 110.9;   // 台灣緯度附近每度的公里數
+    const d = dx * dx + dy * dy;
+    if (d < bestD){ bestD = d; best = county; }
+  }
+  return bestD <= 120 * 120 ? best : null;   // 離最近參考點超過 120 公里＝不在臺灣
+}
+function fmtSmsNum(n){ return /^09\d{8}$/.test(n) ? `${n.slice(0,4)}-${n.slice(4,7)}-${n.slice(7)}` : n; }
+function detectCounty(a, displayName){
+  // 縣轄市（竹北市、員林市…）會出現在 a.city，所以每個候選值都要逐一比對到縣市表為止
+  for (const cand of [a.city, a.county, a.state, displayName]){
+    if (!cand) continue;
+    const c = cand.replace(/台/g, "臺");
+    for (const county in COUNTY_SMS) if (c.includes(county)) return county;
+  }
+  return null;
+}
+
+const VIO_KEYWORDS = [
+  ["併排", "併排停車"],
+  ["人行道", "停在人行道上"],
+  ["行人穿越道", "停在行人穿越道上"], ["行穿", "停在行人穿越道上"], ["斑馬線", "停在行人穿越道上"],
+  ["機車格", "占用機車停車格"], ["機車位", "占用機車停車格"], ["機車停車格", "占用機車停車格"],
+  ["身心障礙", "占用身心障礙停車位"], ["身障", "占用身心障礙停車位"], ["殘障", "占用身心障礙停車位"],
+  ["公車站", "於公車站違規停車"], ["站牌", "於公車站違規停車"],
+  ["消防栓", "於消防栓5公尺內違規停車"],
+  ["交岔路口", "於交岔路口違規停車"], ["路口", "於交岔路口違規停車"],
+  ["出入口", "擋住車輛出入口"], ["車道口", "擋住車輛出入口"],
+  ["紅線", "紅線違規停車，阻礙車流"], ["黃線", "紅線違規停車，阻礙車流"],
+];
+function matchViolation(text){
+  for (const [k, v] of VIO_KEYWORDS) if (text.includes(k)) return v;
+  return null;
+}
+function toHalfWidth(s){
+  return s.replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+}
+/* 語音辨識常把車牌唸法轉成同音字；只在車牌抽取用的副本上轉回字母/數字，不影響其他欄位 */
+const PLATE_HOMO = {
+  "欸":"A","誒":"A","逼":"B","必":"B","比":"B","西":"C","低":"D","滴":"D","伊":"E","衣":"E","依":"E",
+  "夫":"F","福":"F","雞":"G","機":"G","吉":"G","愛":"I","傑":"J","捷":"J","開":"K","凱":"K","姆":"M","母":"M",
+  "恩":"N","歐":"O","喔":"O","批":"P","皮":"P","球":"Q","兒":"R","斯":"S","踢":"T","提":"T","優":"U","尤":"U",
+  "微":"V","薇":"V","歪":"Y","賊":"Z",
+  "零":"0","〇":"0","洞":"0","一":"1","幺":"1","二":"2","兩":"2","三":"3","四":"4","五":"5","六":"6","七":"7","拐":"7","八":"8","九":"9",
+};
+function extractPlate(text){
+  let t = toHalfWidth(text).toUpperCase().replace(/[\s\-—–－.．,，、]/g, "");
+  t = t.replace(/打不溜|達不溜/g, "W").replace(/艾克斯/g, "X");
+  t = [...t].map(c => PLATE_HOMO[c] || c).join("");
+  const m = t.match(/([A-Z]{2,3})(\d{3,4})|(\d{3,4})([A-Z]{2,3})/);
+  if (!m) return null;
+  return m[1] ? `${m[1]}-${m[2]}` : `${m[3]}-${m[4]}`;
+}
+function extractAddress(text){
+  const m = text.match(/[一-龥]{1,10}?(?:路|街|大道)(?:[一二三四五六七八九十\d]{1,3}段)?(?:\d{1,4}巷)?(?:\d{1,3}弄)?(?:\d{1,5}號)?/);
+  if (!m) return null;
+  const a = m[0].replace(/^(?:違停在|停在|停於|卡在|在|於|到)+/, "");      // 剝掉被連進來的動詞
+  if (/(交岔路|馬路|走路|讓路|叉路)$/.test(a)) return null;               // 排除誤抓的一般詞
+  if (!/[號段巷]/.test(a) && a.length < 4) return null;                    // 太短又沒門牌，不可信
+  return /號$/.test(a) ? a + "前" : a;
+}
+function fmtDateTime(d){
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")} ` +
+         `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
+}
+function reportText(d, addr, plate, veh, vio, state){
+  const date = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}`;
+  const hm = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  return `違規時間：${date} ${hm}
+違規地點：${addr || "（地址）"}
+車牌號碼：${plate || "（車牌）"}（${veh}）
+違規事實：${vio}，${state || ""}如附件照片/影片所示。
+檢附證據可清楚辨識車牌、地點與違規事實，請依法舉發。`;
+}
+/* ========== PURE-END ========== */
+
 /* ---------- 設定 ---------- */
 const SETTINGS_KEY = "wtkb.settings";
 let settings = { smsNumber: "", lastCounty: "", lastSmsNumber: "" };
@@ -393,7 +528,7 @@ function switchTab(id){
   document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("active", s.id === id));
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === id));
   if (id === "tab-photo" && !$("wmPlace").value) $("wmPlace").value = $("address").value;
-  if (id === "tab-info") buildReportBody();
+  if (id === "tab-info"){ buildReportBody(); renderRecords(); }
 }
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 
@@ -407,26 +542,8 @@ function toast(msg){
   toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
 }
 
-/* ---------- 各縣市手機簡訊報案專線（警政署勤指中心公告，更新日期 114-07-28） ---------- */
-const COUNTY_SMS = {
-  "臺北市": "0911510914", "新北市": "0911510105", "桃園市": "0917110880", "臺中市": "0911510915",
-  "臺南市": "0911510916", "高雄市": "0911510917", "基隆市": "0911510918", "新竹市": "0911510919",
-  "嘉義市": "0911510920", "新竹縣": "0911510921", "苗栗縣": "0911510922", "彰化縣": "0911510933",
-  "南投縣": "0911510923", "雲林縣": "0911510924", "嘉義縣": "0911510925", "屏東縣": "0911510926",
-  "宜蘭縣": "0911510927", "花蓮縣": "0911510928", "臺東縣": "0911510929", "澎湖縣": "0911510930",
-  "金門縣": "0911510931", "連江縣": "0911510932",
-};
-let autoSms = null;   // { county, number }，由定位反查結果判斷
-function fmtSmsNum(n){ return /^09\d{8}$/.test(n) ? `${n.slice(0,4)}-${n.slice(4,7)}-${n.slice(7)}` : n; }
-function detectCounty(a, displayName){
-  // 縣轄市（竹北市、員林市…）會出現在 a.city，所以每個候選值都要逐一比對到縣市表為止
-  for (const cand of [a.city, a.county, a.state, displayName]){
-    if (!cand) continue;
-    const c = cand.replace(/台/g, "臺");
-    for (const county in COUNTY_SMS) if (c.includes(county)) return county;
-  }
-  return null;
-}
+/* ---------- 簡訊專線選擇（號碼表與縣市判斷在上方純函式區） ---------- */
+let autoSms = null;   // { county, number }，由定位（離線最近點或線上反查）判斷
 function smsTarget(){
   if (settings.smsNumber) return { num: settings.smsNumber, custom: true };
   if (autoSms) return { num: autoSms.number, label: autoSms.county };
@@ -456,8 +573,22 @@ function locate(){
   navigator.geolocation.getCurrentPosition(async pos => {
     lastPos = pos.coords;
     const { latitude: lat, longitude: lon, accuracy } = pos.coords;
-    st.textContent = `已定位（誤差約 ${Math.round(accuracy)} 公尺）`;
-    st.className = "status ok";
+    const acc = Math.round(accuracy);
+    if (acc > 50){
+      st.textContent = `已定位，但誤差約 ${acc} 公尺偏大——送出前請核對門牌`;
+      st.className = "status err";
+    } else {
+      st.textContent = `已定位（誤差約 ${acc} 公尺）`;
+      st.className = "status ok";
+    }
+    const offCounty = countyFromCoords(lat, lon);   // 沒網路也先選好縣市專線；線上反查成功後會覆蓋
+    if (offCounty){
+      autoSms = { county: offCounty, number: COUNTY_SMS[offCounty] };
+      settings.lastCounty = offCounty;
+      settings.lastSmsNumber = autoSms.number;
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    }
+    updateSmsUi();
     $("geoDetail").innerHTML =
       `座標 ${lat.toFixed(6)}, ${lon.toFixed(6)} ｜ <a href="https://maps.google.com/?q=${lat},${lon}" target="_blank" rel="noopener">在地圖確認</a>`;
     try {
@@ -484,7 +615,7 @@ function locate(){
         buildSms();
       }
     } catch(e){
-      st.textContent = "已定位，但轉地址失敗，請手動輸入或看門牌";
+      st.textContent = "已定位，但轉地址失敗，請手動輸入或看門牌" + (autoSms ? "（簡訊專線已依座標選定）" : "");
       st.className = "status err";
     }
   }, err => {
@@ -543,7 +674,13 @@ judgeBox.addEventListener("click", e => {
 
 /* ---------- 簡訊組合 ---------- */
 let smsEdited = false;
-$("smsBody").addEventListener("input", () => smsEdited = true);
+$("smsBody").addEventListener("input", () => { smsEdited = true; updateSmsCount(); });
+function updateSmsCount(){
+  const len = [...$("smsBody").value].length;
+  const el = $("smsCount");
+  if (len <= 70){ el.textContent = `${len} / 70 字（單封簡訊）`; el.className = "hint"; }
+  else { el.textContent = `${len} 字——超過 70 字，會拆成約 ${Math.ceil(len / 67)} 封傳送`; el.className = "status err"; }
+}
 ["address","plate"].forEach(id => $(id).addEventListener("input", buildSms));
 
 function nowHM(){
@@ -555,6 +692,7 @@ function buildSms(){
   const addr = $("address").value.trim() || "（地址）";
   const plate = $("plate").value.trim().toUpperCase() || "（車牌）";
   $("smsBody").value = `${nowHM()}，在${addr}，車牌 ${plate} 之${vehicle}${violation}，${carState}阻礙交通，請派員處理。`;
+  updateSmsCount();
 }
 buildSms();
 setInterval(() => { if (!smsEdited) buildSms(); }, 30000);
@@ -564,6 +702,7 @@ $("btnSms").onclick = () => {
   if (!t){ toast("還不知道你在哪個縣市：請先定位，或到設定輸入專線號碼"); return; }
   const body = encodeURIComponent($("smsBody").value);
   const sep = IS_IOS ? "&" : "?";
+  addRecord();
   location.href = `sms:${t.num}${sep}body=${body}`;
 };
 $("btnCall").onclick = () => { location.href = "tel:110"; };
@@ -579,19 +718,59 @@ async function copyText(text){
 }
 
 /* ---------- 檢舉範本 ---------- */
+let reportEdited = false;
+$("reportBody").addEventListener("input", () => reportEdited = true);
 function buildReportBody(){
-  const d = new Date();
-  const date = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}`;
-  const addr = $("address").value.trim() || "（地址）";
-  const plate = $("plate").value.trim().toUpperCase() || "（車牌）";
-  $("reportBody").value =
-`違規時間：${date} ${nowHM()}
-違規地點：${addr}
-車牌號碼：${plate}（${vehicle}）
-違規事實：${violation}，${carState || ""}如附件照片/影片所示。
-檢附證據可清楚辨識車牌、地點與違規事實，請依法舉發。`;
+  if (reportEdited) return;
+  $("reportBody").value = reportText(new Date(),
+    $("address").value.trim(), $("plate").value.trim().toUpperCase(), vehicle, violation, carState);
 }
 $("btnCopyReport").onclick = () => copyText($("reportBody").value);
+
+/* ---------- 報案紀錄（7 天檢舉期限追蹤） ---------- */
+const REC_KEY = "wtkb.records";
+function loadRecords(){ try { return JSON.parse(localStorage.getItem(REC_KEY) || "[]"); } catch(e){ return []; } }
+function saveRecords(r){ localStorage.setItem(REC_KEY, JSON.stringify(r.slice(0, 50))); }
+function addRecord(){
+  const r = loadRecords();
+  r.unshift({ t: Date.now(), addr: $("address").value.trim(),
+    plate: $("plate").value.trim().toUpperCase(), vehicle, violation, state: carState });
+  saveRecords(r);
+}
+function esc(s){ const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+function renderRecords(){
+  const list = $("recordList"), recs = loadRecords();
+  if (!recs.length){ list.innerHTML = '<div class="hint">還沒有紀錄——按過「開啟簡訊報案」就會自動記一筆。</div>'; return; }
+  list.innerHTML = "";
+  recs.forEach((rec, i) => {
+    const leftMs = rec.t + 7 * 864e5 - Date.now();
+    const item = document.createElement("div");
+    item.style.cssText = "padding:10px 4px; border-bottom:1px solid var(--border)";
+    item.innerHTML =
+      `<div style="font-size:14.5px"><b>${esc(rec.plate) || "（無車牌）"}</b>｜${esc(rec.violation)}</div>
+       <div class="hint" style="margin-top:2px">${fmtDateTime(new Date(rec.t))}｜${esc(rec.addr) || "（無地址）"}</div>
+       <div class="status ${leftMs > 0 ? "ok" : "err"}" style="margin-top:2px">${
+         leftMs > 0 ? `⏳ 事後檢舉期限剩 ${Math.ceil(leftMs / 864e5)} 天` : "❌ 已逾 7 天檢舉期限"}</div>
+       <div class="btnrow" style="margin-top:6px">
+         <button class="btn mini secondary act-use">📄 帶入檢舉範本</button>
+         <button class="btn mini secondary act-del">🗑 刪除</button>
+       </div>`;
+    item.querySelector(".act-use").onclick = () => useRecord(rec);
+    item.querySelector(".act-del").onclick = () => { const rr = loadRecords(); rr.splice(i, 1); saveRecords(rr); renderRecords(); };
+    list.appendChild(item);
+  });
+}
+function useRecord(rec){
+  $("plate").value = rec.plate;
+  if (rec.addr){ $("address").value = rec.addr; addrLocked = true; }
+  if (rec.vehicle) setVehicle(rec.vehicle);
+  if (rec.violation) setViolation(rec.violation);
+  setCarState(rec.state || "");
+  $("reportBody").value = reportText(new Date(rec.t), rec.addr, rec.plate, rec.vehicle, rec.violation, rec.state);
+  reportEdited = true;   // 保住範本裡「當時」的時間，不被之後的自動重建蓋掉
+  window.scrollTo(0, 0);
+  toast("已帶入當時的資料與時間");
+}
 
 /* ---------- EXIF 解析（僅取 DateTimeOriginal） ---------- */
 function readExifDate(buf){
@@ -645,11 +824,6 @@ $("photoInput").addEventListener("change", async e => {
   e.target.value = "";
   for (const f of files) await processPhoto(f);
 });
-
-function fmtDateTime(d){
-  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")} ` +
-         `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
-}
 
 async function processPhoto(file){
   const limitMB = parseFloat($("photoSizeLimit").value);
@@ -734,10 +908,7 @@ function addResult(container, blob, filename, kind, metaText){
 /* ---------- 影片剪輯＋壓縮 ---------- */
 let videoFile = null;
 $("btnPickVideo").onclick = () => $("videoInput").click();
-$("videoInput").addEventListener("change", e => {
-  const f = e.target.files[0];
-  e.target.value = "";
-  if (!f) return;
+function loadVideoFile(f){
   videoFile = f;
   const v = $("srcVideo");
   v.src = URL.createObjectURL(f);
@@ -747,6 +918,29 @@ $("videoInput").addEventListener("change", e => {
     $("trimEnd").value = Math.min(v.duration, 20).toFixed(1);
     $("trimEnd").max = v.duration.toFixed(1);
   };
+}
+$("videoInput").addEventListener("change", e => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (f) loadVideoFile(f);
+});
+
+/* ---------- 先拍再報：快速開相機 ---------- */
+$("btnQuickPhoto").onclick = () => $("quickPhotoInput").click();
+$("btnQuickVideo").onclick = () => $("quickVideoInput").click();
+$("quickPhotoInput").addEventListener("change", async e => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  if (!files.length) return;
+  switchTab("tab-photo");            // 先切分頁，讓浮水印地點自動帶入
+  for (const f of files) await processPhoto(f);
+});
+$("quickVideoInput").addEventListener("change", e => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  switchTab("tab-video");
+  loadVideoFile(f);
 });
 $("btnSetStart").onclick = () => { $("trimStart").value = $("srcVideo").currentTime.toFixed(1); };
 $("btnSetEnd").onclick = () => { $("trimEnd").value = $("srcVideo").currentTime.toFixed(1); };
@@ -808,7 +1002,8 @@ $("btnProcessVideo").onclick = async () => {
     }
     const p = Math.min(100, (v.currentTime - start) / dur * 100);
     $("videoProg").value = p;
-    $("videoProgText").textContent = `處理中 ${Math.round(p)}%…請保持此頁面開啟，勿切換 App。`;
+    const remain = Math.max(0, Math.ceil(end - v.currentTime));
+    $("videoProgText").textContent = `處理中 ${Math.round(p)}%（約再 ${remain} 秒）…請保持此頁面開啟，勿切換 App。`;
     if (v.currentTime >= end || v.ended){ finish(); return; }
     raf = requestAnimationFrame(paint);
   };
@@ -852,39 +1047,6 @@ function setViolation(v){
 function setVehicle(v){ if (setChipOn("vehicleChips", v)){ vehicle = v; buildSms(); } }
 function setCarState(v){ if (setChipOn("stateChips", v)){ carState = v; buildSms(); } }
 
-const VIO_KEYWORDS = [
-  ["併排", "併排停車"],
-  ["人行道", "停在人行道上"],
-  ["行人穿越道", "停在行人穿越道上"], ["行穿", "停在行人穿越道上"], ["斑馬線", "停在行人穿越道上"],
-  ["機車格", "占用機車停車格"], ["機車位", "占用機車停車格"], ["機車停車格", "占用機車停車格"],
-  ["身心障礙", "占用身心障礙停車位"], ["身障", "占用身心障礙停車位"], ["殘障", "占用身心障礙停車位"],
-  ["公車站", "於公車站違規停車"], ["站牌", "於公車站違規停車"],
-  ["消防栓", "於消防栓5公尺內違規停車"],
-  ["交岔路口", "於交岔路口違規停車"], ["路口", "於交岔路口違規停車"],
-  ["出入口", "擋住車輛出入口"], ["車道口", "擋住車輛出入口"],
-  ["紅線", "紅線違規停車，阻礙車流"], ["黃線", "紅線違規停車，阻礙車流"],
-];
-function matchViolation(text){
-  for (const [k, v] of VIO_KEYWORDS) if (text.includes(k)) return v;
-  return null;
-}
-function toHalfWidth(s){
-  return s.replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
-}
-function extractPlate(text){
-  const t = toHalfWidth(text).toUpperCase().replace(/[\s\-—–－.．,，、]/g, "");
-  const m = t.match(/([A-Z]{2,3})(\d{3,4})|(\d{3,4})([A-Z]{2,3})/);
-  if (!m) return null;
-  return m[1] ? `${m[1]}-${m[2]}` : `${m[3]}-${m[4]}`;
-}
-function extractAddress(text){
-  const m = text.match(/[一-龥]{1,10}?(?:路|街|大道)(?:[一二三四五六七八九十\d]{1,3}段)?(?:\d{1,4}巷)?(?:\d{1,3}弄)?(?:\d{1,5}號)?/);
-  if (!m) return null;
-  const a = m[0];
-  if (/^(交岔路|馬路|走路|讓路|叉路)/.test(a)) return null;               // 排除誤抓的一般詞
-  if (!/[號段巷]/.test(a) && a.length < 4) return null;                    // 太短又沒門牌，不可信
-  return /號$/.test(a) ? a + "前" : a;
-}
 function parseFill(text){
   if (!text || !text.trim()) return;
   const filled = [];
