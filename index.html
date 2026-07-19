@@ -192,7 +192,10 @@ a{color:#6cb2ff;}
   <div class="card">
     <h2>4. 簡訊內容（可修改）</h2>
     <textarea id="smsBody"></textarea>
-    <div class="hint" id="smsCount" style="margin-top:4px"></div>
+    <div class="row" style="margin-top:4px">
+      <div class="hint" id="smsCount" style="margin-top:0"></div>
+      <button class="btn mini secondary" id="btnRebuildSms" style="flex:0 0 auto">↻ 重新產生</button>
+    </div>
     <button class="btn primary" id="btnSms">📨 開啟簡訊報案</button>
     <div class="status" id="smsTargetHint" style="margin-top:6px"></div>
     <div class="btnrow" style="margin-top:8px">
@@ -538,7 +541,8 @@ let settings = { smsNumber: "", lastCounty: "", lastSmsNumber: "", aiProvider: "
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch(e){}
 if (settings.smsNumber === "0911510110") settings.smsNumber = "";   // 舊版誤植的「全國統一號碼」→ 改為自動
 
-const AI_DEFAULT_MODEL = { anthropic: "claude-opus-4-8", openai: "gpt-4o-mini", gemini: "gemini-2.0-flash", openrouter: "openai/gpt-4o-mini" };
+const AI_DEFAULT_MODEL = { anthropic: "claude-opus-4-8", openai: "gpt-4o-mini", gemini: "gemini-3.5-flash", openrouter: "openai/gpt-4o-mini" };
+if (settings.aiModel === "gemini-2.0-flash") settings.aiModel = "";   // 2.0 已於 2026-06-01 關閉 → 改用新預設
 function updateAiModelPlaceholder(){
   const p = $("setAiProvider").value;
   $("setAiModel").placeholder = AI_DEFAULT_MODEL[p] ? `預設：${AI_DEFAULT_MODEL[p]}` : "先選擇解析引擎";
@@ -644,8 +648,11 @@ function locate(){
     $("geoDetail").innerHTML =
       `座標 ${lat.toFixed(6)}, ${lon.toFixed(6)} ｜ <a href="https://maps.google.com/?q=${lat},${lon}" target="_blank" rel="noopener">在地圖確認</a>`;
     try {
+      const ctrl = new AbortController();                 // 網路爛時別讓反查掛住：8 秒沒回就放棄，走 catch 分支
+      const tm = setTimeout(() => ctrl.abort(), 8000);
       const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&accept-language=zh-TW`,
-        { headers: { "Accept": "application/json" } });
+        { headers: { "Accept": "application/json" }, signal: ctrl.signal });
+      clearTimeout(tm);
       const j = await r.json();
       const a = j.address || {};
       const county = detectCounty(a, j.display_name || "");
@@ -727,6 +734,7 @@ judgeBox.addEventListener("click", e => {
 /* ---------- 簡訊組合 ---------- */
 let smsEdited = false;
 $("smsBody").addEventListener("input", () => { smsEdited = true; updateSmsCount(); });
+$("btnRebuildSms").onclick = () => { smsEdited = false; buildSms(); toast("已依目前欄位重新產生"); };
 function updateSmsCount(){
   const len = [...$("smsBody").value].length;
   const el = $("smsCount");
@@ -885,7 +893,13 @@ async function processPhoto(file){
 
   const img = new Image();
   const url = URL.createObjectURL(file);
-  await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });
+  try {
+    await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });
+  } catch(e){
+    URL.revokeObjectURL(url);
+    toast(`「${file.name}」無法解碼（可能是 HEIC 格式），請先轉存 JPG 再選`);
+    return;
+  }
 
   let W = img.naturalWidth, H = img.naturalHeight;
   const maxDim = 2560;
