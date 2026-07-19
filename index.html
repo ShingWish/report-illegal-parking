@@ -61,6 +61,18 @@ input[type=text], input[type=number], textarea, select{
   border-radius:10px; padding:10px 12px; font-size:16px; outline:none;}
 input:focus, textarea:focus{border-color:var(--accent);}
 textarea{resize:vertical; min-height:88px;}
+.clearwrap{position:relative; display:block;}
+.clearwrap > input, .clearwrap > textarea{padding-right:38px;}
+.clearwrap > #plate{padding-left:38px;} /* 車牌置中，左右留同寬才不偏 */
+.clear-x{position:absolute; right:7px; top:50%; transform:translateY(-50%);
+  width:24px; height:24px; padding:0; border:none; border-radius:50%;
+  background:var(--chip); color:var(--muted); font-size:13px; line-height:1;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;}
+.clear-x:active{background:var(--accent); color:#fff;}
+.clearwrap.ta .clear-x{top:9px; transform:none;}
+.clearwrap > :placeholder-shown + .clear-x,
+.clearwrap > [style*="display:none"] + .clear-x,
+.clearwrap > [style*="display: none"] + .clear-x{display:none;}
 .row{display:flex; gap:8px; align-items:center;}
 .row > *{flex:1;}
 .chips{display:flex; flex-wrap:wrap; gap:8px;}
@@ -1334,6 +1346,29 @@ function applyUrlParams(){
   }
   buildSms();
 }
+
+/* ---------- 快速清除鈕：文字欄位右側加 ✕（有內容才顯示） ---------- */
+["voiceText","address","plate","violationOther","smsBody","wmPlace",
+ "reportBody","setSmsNumber","setAiModel","setAiKey"].forEach(id => {
+  const el = $(id);
+  if (!el) return;
+  if (!el.placeholder) el.placeholder = " "; // 讓 :placeholder-shown 能判斷空值
+  const wrap = document.createElement("span");
+  wrap.className = "clearwrap" + (el.tagName === "TEXTAREA" ? " ta" : "");
+  el.parentNode.insertBefore(wrap, el);
+  wrap.appendChild(el);
+  const x = document.createElement("button");
+  x.type = "button";
+  x.className = "clear-x";
+  x.textContent = "✕";
+  x.setAttribute("aria-label", "清除");
+  x.addEventListener("click", () => {
+    el.value = "";
+    el.dispatchEvent(new Event("input", {bubbles:true}));
+    el.focus();
+  });
+  wrap.appendChild(x);
+});
 
 /* ---------- 啟動 ---------- */
 applyUrlParams();

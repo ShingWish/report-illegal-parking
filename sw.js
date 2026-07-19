@@ -1,4 +1,4 @@
-const CACHE = "wtkb-v13";
+const CACHE = "wtkb-v14";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./favicon-48.png"];
 
 self.addEventListener("install", e => {
