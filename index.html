@@ -121,7 +121,7 @@ a{color:#6cb2ff;}
       <button class="btn mini secondary" id="btnParseVoice" style="flex:0 0 auto">填入</button>
     </div>
     <div class="status" id="voiceStatus" style="margin-top:6px"></div>
-    <div class="hint" id="voiceHint">例：「車牌 ABC 1234 汽車併排停車 車內無人」、「和平東路二段96號 機車格被汽車占用」。</div>
+    <div class="hint" id="voiceHint">例：「車牌 ABC 1234 汽車併排停車 車內無人」、「和平東路二段96號 機車格被汽車占用」。想要更聰明的解析，可到 ⚙︎ 設定開啟 AI 解析（選填 API Key）。</div>
   </div>
 
   <div class="card">
@@ -373,8 +373,31 @@ a{color:#6cb2ff;}
     <h2>設定</h2>
     <label class="small">簡訊報案號碼（留空＝自動依定位選擇所在縣市的專線，建議留空）</label>
     <input type="text" id="setSmsNumber" inputmode="tel" placeholder="自動（依定位判斷縣市）">
-    <button class="btn secondary" id="btnSaveSettings">儲存</button>
     <div class="hint">所有資料只儲存在你手機的瀏覽器中，不會上傳到任何伺服器。定位轉地址使用 OpenStreetMap Nominatim 公開服務（只傳送座標）。</div>
+  </div>
+
+  <div class="card">
+    <h2>🤖 AI 語音解析（可選）</h2>
+    <p class="hint" style="margin-top:0">開啟後，語音/文字填單仍先用內建規則「立即」填入，AI 解析完成後再自動修正——同音字、口語、複雜句都聽得懂。不設定也完全可用。</p>
+    <label class="small">解析引擎</label>
+    <select id="setAiProvider">
+      <option value="">關閉（只用內建規則解析）</option>
+      <option value="anthropic">Anthropic Claude</option>
+      <option value="openai">OpenAI</option>
+      <option value="gemini">Google Gemini</option>
+    </select>
+    <label class="small">模型（留空使用預設）</label>
+    <input type="text" id="setAiModel" autocomplete="off" placeholder="先選擇解析引擎">
+    <label class="small">API Key</label>
+    <div class="row">
+      <input type="password" id="setAiKey" autocomplete="off" placeholder="貼上你的 API Key">
+      <button class="btn mini secondary" id="btnToggleKey" style="flex:0 0 auto" type="button">👁 顯示</button>
+    </div>
+    <div class="big-note" style="margin-top:10px">🔒 <b>Key 的安全性</b>：只儲存在這支手機的瀏覽器（localStorage），本 App 沒有伺服器、不會上傳；解析時句子與 Key 只直接傳給你選擇的 AI 服務商。瀏覽器裡的 Key 無法真正保密——請到服務商後台建立<b>設有用量上限的專用 Key</b>，不要用主力 Key；共用裝置請勿儲存；清除瀏覽器資料即可刪除。注意：唸出的內容（車牌、地址）會傳給該服務商。</div>
+  </div>
+
+  <div class="card">
+    <button class="btn primary" id="btnSaveSettings" style="margin-top:0">💾 儲存設定</button>
   </div>
 </section>
 </main>
@@ -510,17 +533,39 @@ function reportText(d, addr, plate, veh, vio, state){
 
 /* ---------- 設定 ---------- */
 const SETTINGS_KEY = "wtkb.settings";
-let settings = { smsNumber: "", lastCounty: "", lastSmsNumber: "" };
+let settings = { smsNumber: "", lastCounty: "", lastSmsNumber: "", aiProvider: "", aiModel: "", aiKey: "" };
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch(e){}
 if (settings.smsNumber === "0911510110") settings.smsNumber = "";   // 舊版誤植的「全國統一號碼」→ 改為自動
+
+const AI_DEFAULT_MODEL = { anthropic: "claude-opus-4-8", openai: "gpt-4o-mini", gemini: "gemini-2.0-flash" };
+function updateAiModelPlaceholder(){
+  const p = $("setAiProvider").value;
+  $("setAiModel").placeholder = AI_DEFAULT_MODEL[p] ? `預設：${AI_DEFAULT_MODEL[p]}` : "先選擇解析引擎";
+}
 $("setSmsNumber").value = settings.smsNumber;
+$("setAiProvider").value = settings.aiProvider || "";
+$("setAiModel").value = settings.aiModel || "";
+$("setAiKey").value = settings.aiKey || "";
+updateAiModelPlaceholder();
+$("setAiProvider").onchange = updateAiModelPlaceholder;
+$("btnToggleKey").onclick = () => {
+  const k = $("setAiKey");
+  const show = k.type === "password";
+  k.type = show ? "text" : "password";
+  $("btnToggleKey").textContent = show ? "🙈 隱藏" : "👁 顯示";
+};
 $("btnSaveSettings").onclick = () => {
   settings.smsNumber = $("setSmsNumber").value.replace(/[^0-9+]/g, "");
+  settings.aiProvider = $("setAiProvider").value;
+  settings.aiModel = $("setAiModel").value.trim();
+  settings.aiKey = $("setAiKey").value.trim();
+  if (settings.aiProvider && !settings.aiKey){ toast("已選擇 AI 引擎但沒填 API Key，AI 解析不會啟用"); }
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   updateSmsUi();
-  toast(settings.smsNumber ? "已儲存自訂號碼" : "已設為自動依定位選擇");
+  toast("已儲存設定" + (aiEnabled() ? "（🤖 AI 解析已啟用）" : ""));
   switchTab("tab-sms");
 };
+function aiEnabled(){ return !!(settings.aiProvider && settings.aiKey); }
 $("btnSettings").onclick = () => switchTab("tab-settings");
 
 /* ---------- 分頁 ---------- */
@@ -1065,6 +1110,100 @@ function parseFill(text){
   const st = $("voiceStatus");
   if (filled.length){ st.textContent = "✅ 已填入：" + filled.join("、"); st.className = "status ok"; }
   else { st.textContent = "沒抓到車牌或違規項目，請再唸一次或直接手動輸入"; st.className = "status err"; }
+  if (aiEnabled()) runAiParse(text);   // 內建結果先上，AI 解析完成後再覆蓋修正
+}
+
+/* ---------- AI 語音解析（可選；設定頁開啟） ---------- */
+let aiSeq = 0;   // 只採用最後一次解析的結果，避免舊回應蓋掉新輸入
+function aiPrompt(text){
+  return `你是台灣違規停車報案助手。從句子抽取欄位，只輸出一行 JSON，不要輸出任何其他文字或說明。
+JSON 格式（抽不到的欄位填 null）：
+{"plate":"車牌，正規化為大寫加連字號（如 ABC-1234），同音字要還原（欸必西1234→ABC-1234）","vtype":"汽車|機車|貨車","vio":"違規事實，優先從以下擇一：併排停車、停在人行道上、停在行人穿越道上、占用機車停車格、占用身心障礙停車位、於公車站違規停車、於消防栓5公尺內違規停車、於交岔路口違規停車、擋住車輛出入口、紅線違規停車，阻礙車流。都不符合才自行簡述","addr":"地址或地點","state":"無人|有人"}
+句子：「${text}」`;
+}
+async function aiParse(text){
+  const p = settings.aiProvider, key = settings.aiKey;
+  const model = settings.aiModel || AI_DEFAULT_MODEL[p];
+  const prompt = aiPrompt(text);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  let raw = "";
+  try {
+    if (p === "anthropic"){
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST", signal: ctrl.signal,
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({ model, max_tokens: 300,
+          messages: [{ role: "user", content: prompt }] }),
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      raw = (j.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    } else if (p === "openai"){
+      const r = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST", signal: ctrl.signal,
+        headers: { "content-type": "application/json", "authorization": "Bearer " + key },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }],
+          response_format: { type: "json_object" } }),
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      raw = j.choices?.[0]?.message?.content || "";
+    } else if (p === "gemini"){
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+        method: "POST", signal: ctrl.signal,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" } }),
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      raw = (j.candidates?.[0]?.content?.parts || []).map(x => x.text).join("");
+    } else throw new Error("未知的解析引擎");
+  } finally { clearTimeout(timer); }
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error("回應不是 JSON");
+  return JSON.parse(m[0]);
+}
+function applyAiResult(d){
+  const filled = [];
+  if (d.plate){
+    const pl = extractPlate(String(d.plate)) || toHalfWidth(String(d.plate)).toUpperCase();
+    $("plate").value = pl; filled.push("車牌 " + pl);
+  }
+  if (d.vtype){
+    if (/機/.test(d.vtype)) setVehicle("機車");
+    else if (/貨/.test(d.vtype)) setVehicle("貨車");
+    else setVehicle("自小客車");
+    filled.push("車種：" + d.vtype);
+  }
+  if (d.vio){ setViolation(matchViolation(String(d.vio)) || String(d.vio)); filled.push("違規：" + d.vio); }
+  if (d.state){
+    if (/無人/.test(d.state)) { setCarState("車內無人且已熄火，"); filled.push("車內無人"); }
+    else if (/有人|駕駛/.test(d.state)) { setCarState("駕駛在車上，"); filled.push("駕駛在車上"); }
+  }
+  if (d.addr){ $("address").value = String(d.addr); addrLocked = true; filled.push("地點 " + d.addr); }
+  buildSms();
+  const st = $("voiceStatus");
+  st.textContent = filled.length ? "🤖 AI 已解析：" + filled.join("、") : "🤖 AI 沒抽到欄位，維持內建解析結果";
+  st.className = "status ok";
+}
+function runAiParse(text){
+  const seq = ++aiSeq;
+  const st = $("voiceStatus");
+  st.textContent += "｜🤖 AI 解析中…";
+  aiParse(text)
+    .then(d => { if (seq === aiSeq) applyAiResult(d); })
+    .catch(err => {
+      if (seq !== aiSeq) return;
+      st.textContent = "🤖 AI 解析失敗（" + (err.name === "AbortError" ? "逾時" : err.message) + "），已保留內建解析結果";
+      st.className = "status err";
+    });
 }
 $("btnParseVoice").onclick = () => parseFill($("voiceText").value);
 $("voiceText").addEventListener("keydown", e => { if (e.key === "Enter") parseFill($("voiceText").value); });
