@@ -559,7 +559,13 @@ $("btnSaveSettings").onclick = () => {
   settings.smsNumber = $("setSmsNumber").value.replace(/[^0-9+]/g, "");
   settings.aiProvider = $("setAiProvider").value;
   settings.aiModel = $("setAiModel").value.trim();
-  settings.aiKey = $("setAiKey").value.trim();
+  // API Key 走 HTTP header，只允許可見 ASCII；剪貼簿常夾帶零寬空格/全形字元，一律濾掉
+  const rawKey = $("setAiKey").value;
+  settings.aiKey = rawKey.replace(/[^\x21-\x7e]/g, "");
+  if (rawKey && settings.aiKey !== rawKey.trim()){
+    $("setAiKey").value = settings.aiKey;
+    toast("已自動清除 Key 中的不可見特殊字元");
+  }
   if (settings.aiProvider && !settings.aiKey){ toast("已選擇 AI 引擎但沒填 API Key，AI 解析不會啟用"); }
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   updateSmsUi();
@@ -1123,8 +1129,10 @@ JSON 格式（抽不到的欄位填 null）：
 句子：「${text}」`;
 }
 async function aiParse(text){
-  const p = settings.aiProvider, key = settings.aiKey;
-  const model = settings.aiModel || AI_DEFAULT_MODEL[p];
+  const p = settings.aiProvider;
+  const key = (settings.aiKey || "").replace(/[^\x21-\x7e]/g, "");   // 舊存的 Key 也可能夾帶特殊字元
+  if (!key) throw new Error("API Key 是空的或全是特殊字元，請到設定重新貼上");
+  const model = (settings.aiModel || AI_DEFAULT_MODEL[p]).trim();
   const prompt = aiPrompt(text);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
