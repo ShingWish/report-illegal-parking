@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>違停快報</title>
+<meta name="description" content="快速產生違規停車報案簡訊、照片浮水印與影片壓縮工具">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#d33a2c">
+<style>
+:root{
+  --bg:#111418; --card:#1c2128; --card2:#242b33; --text:#e8eaed; --muted:#9aa4af;
+  --accent:#e5493a; --accent-press:#c03528; --ok:#34a853; --border:#333b45;
+  --chip:#2a323c; --chip-on:#e5493a;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f4f5f7; --card:#ffffff; --card2:#eef0f3; --text:#1b1f24; --muted:#5f6a75;
+    --border:#d8dde3; --chip:#e7eaee; }
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  font-size:16px; line-height:1.5;}
+body{padding-bottom:calc(64px + env(safe-area-inset-bottom));}
+header{position:sticky; top:0; z-index:10; background:var(--bg);
+  padding:calc(10px + env(safe-area-inset-top)) 16px 8px; display:flex; align-items:center; gap:8px;
+  border-bottom:1px solid var(--border);}
+header h1{font-size:18px; margin:0; flex:1; font-weight:700;}
+header .logo{width:26px;height:26px;border-radius:7px;background:var(--accent);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;}
+main{padding:12px; max-width:560px; margin:0 auto;}
+section.tab{display:none;}
+section.tab.active{display:block;}
+.card{background:var(--card); border:1px solid var(--border); border-radius:14px;
+  padding:14px; margin-bottom:12px;}
+.card h2{font-size:15px; margin:0 0 10px; color:var(--muted); font-weight:600;
+  letter-spacing:.05em;}
+label.small{font-size:13px; color:var(--muted); display:block; margin:10px 0 4px;}
+input[type=text], input[type=number], textarea, select{
+  width:100%; background:var(--card2); color:var(--text); border:1px solid var(--border);
+  border-radius:10px; padding:10px 12px; font-size:16px; outline:none;}
+input:focus, textarea:focus{border-color:var(--accent);}
+textarea{resize:vertical; min-height:88px;}
+.row{display:flex; gap:8px; align-items:center;}
+.row > *{flex:1;}
+.chips{display:flex; flex-wrap:wrap; gap:8px;}
+.chip{background:var(--chip); border:1px solid var(--border); color:var(--text);
+  border-radius:999px; padding:7px 14px; font-size:14px; cursor:pointer; user-select:none;}
+.chip.on{background:var(--chip-on); border-color:var(--chip-on); color:#fff; font-weight:600;}
+button.btn{display:block; width:100%; border:none; border-radius:12px; padding:14px;
+  font-size:17px; font-weight:700; cursor:pointer; margin-top:10px;}
+button.primary{background:var(--accent); color:#fff;}
+button.primary:active{background:var(--accent-press);}
+button.secondary{background:var(--card2); color:var(--text); border:1px solid var(--border);}
+button.mini{width:auto; display:inline-block; padding:8px 14px; font-size:14px; margin-top:0;}
+button:disabled{opacity:.45;}
+.hint{font-size:12.5px; color:var(--muted); margin-top:8px;}
+.status{font-size:13.5px; color:var(--muted);}
+.status.ok{color:var(--ok);}
+.status.err{color:var(--accent);}
+nav{position:fixed; bottom:0; left:0; right:0; display:flex; background:var(--card);
+  border-top:1px solid var(--border); padding-bottom:env(safe-area-inset-bottom); z-index:20;}
+nav button{flex:1; background:none; border:none; color:var(--muted); padding:9px 0 7px;
+  font-size:11.5px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px;}
+nav button .ico{font-size:21px; line-height:1;}
+nav button.on{color:var(--accent); font-weight:700;}
+.result-item{border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-top:12px;
+  background:var(--card2);}
+.result-item img, .result-item video{width:100%; display:block; max-height:340px; object-fit:contain;
+  background:#000;}
+.result-item .bar{padding:10px 12px;}
+.result-item .meta{font-size:12.5px; color:var(--muted); margin-bottom:6px; word-break:break-all;}
+.btnrow{display:flex; gap:8px;}
+.btnrow button{flex:1; margin-top:0;}
+progress{width:100%; height:10px; accent-color:var(--accent);}
+details{margin-top:8px;}
+summary{cursor:pointer; font-size:14px; color:var(--muted); font-weight:600;}
+ul.tight{margin:8px 0 0; padding-left:20px; font-size:14px;}
+ul.tight li{margin-bottom:6px;}
+a{color:#6cb2ff;}
+.big-note{background:var(--card2); border-left:4px solid var(--accent); border-radius:8px;
+  padding:10px 12px; font-size:14px; margin-top:10px;}
+.linklist a{display:block; padding:11px 4px; border-bottom:1px solid var(--border);
+  text-decoration:none; font-size:15px;}
+.linklist a:last-child{border-bottom:none;}
+.copied-toast{position:fixed; left:50%; bottom:96px; transform:translateX(-50%);
+  background:#000c; color:#fff; padding:9px 18px; border-radius:999px; font-size:14px;
+  opacity:0; transition:opacity .25s; pointer-events:none; z-index:50;}
+.copied-toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">停</div>
+  <h1>違停快報</h1>
+  <button class="btn mini secondary" id="btnSettings">⚙︎</button>
+</header>
+
+<main>
+<!-- ========== 分頁 1：快報 ========== -->
+<section class="tab active" id="tab-sms">
+  <div class="card">
+    <h2>1. 位置（自動定位）</h2>
+    <div class="row" style="margin-bottom:8px">
+      <span class="status" id="geoStatus">尚未定位</span>
+      <button class="btn mini secondary" id="btnLocate" style="flex:0 0 auto">📍 重新定位</button>
+    </div>
+    <input type="text" id="address" placeholder="定位中會自動帶入，可手動修改" autocomplete="off">
+    <div class="hint" id="geoDetail"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. 車輛</h2>
+    <input type="text" id="plate" placeholder="車牌（例：ABC-1234）" autocomplete="off"
+      autocapitalize="characters" style="text-transform:uppercase; font-size:20px; letter-spacing:.08em; text-align:center;">
+    <label class="small">車種</label>
+    <div class="chips" id="vehicleChips">
+      <span class="chip on" data-v="自小客車">汽車</span>
+      <span class="chip" data-v="機車">機車</span>
+      <span class="chip" data-v="貨車">貨車</span>
+      <span class="chip" data-v="車輛">不明</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. 違規事實</h2>
+    <div class="chips" id="violationChips">
+      <span class="chip on" data-v="併排停車">併排停車</span>
+      <span class="chip" data-v="停在人行道上">人行道</span>
+      <span class="chip" data-v="擋住車輛出入口">擋出入口</span>
+      <span class="chip" data-v="占用機車停車格">占用機車格</span>
+      <span class="chip" data-v="占用身心障礙停車位">占身障位</span>
+      <span class="chip" data-v="停在行人穿越道上">行人穿越道</span>
+      <span class="chip" data-v="於交岔路口違規停車">交岔路口</span>
+      <span class="chip" data-v="於公車站違規停車">公車站</span>
+      <span class="chip" data-v="紅線違規停車，阻礙車流">紅線擋道</span>
+      <span class="chip" data-v="__other__">其他…</span>
+    </div>
+    <input type="text" id="violationOther" placeholder="自行描述違規事實" style="display:none; margin-top:8px">
+  </div>
+
+  <div class="card">
+    <h2>4. 簡訊內容（可修改）</h2>
+    <textarea id="smsBody"></textarea>
+    <button class="btn primary" id="btnSms">📨 開啟簡訊報案（0911-510-110）</button>
+    <div class="btnrow" style="margin-top:8px">
+      <button class="btn secondary" id="btnCopy">📋 複製內容</button>
+      <button class="btn secondary" id="btnCall">☎️ 撥打 110</button>
+    </div>
+    <div class="hint">簡訊報案等同 110 報案，警方會派員到場，任何違停都能處理（不受民眾檢舉項目限制）。門號是實名制，不必附上個資；警方依法對被檢舉人保密你的身分。</div>
+  </div>
+</section>
+
+<!-- ========== 分頁 2：照片 ========== -->
+<section class="tab" id="tab-photo">
+  <div class="card">
+    <h2>照片加浮水印＋壓縮</h2>
+    <p class="hint" style="margin-top:0">選擇違停照片（可多張），自動讀取拍攝時間（EXIF），加上「時間＋地點」浮水印並壓縮到指定大小，避免官方系統退件。</p>
+    <label class="small">地點文字（會印在浮水印上，自動帶入快報頁地址）</label>
+    <input type="text" id="wmPlace" placeholder="例：台北市大安區和平東路二段96號前">
+    <label class="small">輸出大小上限</label>
+    <select id="photoSizeLimit">
+      <option value="2">2 MB（最保險）</option>
+      <option value="5" selected>5 MB</option>
+      <option value="10">10 MB</option>
+    </select>
+    <button class="btn primary" id="btnPickPhoto">🖼 選擇照片</button>
+    <input type="file" id="photoInput" accept="image/*" multiple style="display:none">
+  </div>
+  <div id="photoResults"></div>
+</section>
+
+<!-- ========== 分頁 3：影片 ========== -->
+<section class="tab" id="tab-video">
+  <div class="card">
+    <h2>行車紀錄器影片：剪輯＋壓縮</h2>
+    <p class="hint" style="margin-top:0">官方檢舉系統常限制影片 30 秒／30MB 以內。這裡可以直接剪出關鍵片段並壓縮，不必回電腦處理。輸出不含聲音（檢舉不需要）。</p>
+    <button class="btn primary" id="btnPickVideo">🎬 選擇影片</button>
+    <input type="file" id="videoInput" accept="video/*" style="display:none">
+  </div>
+
+  <div class="card" id="videoEditor" style="display:none">
+    <video id="srcVideo" controls playsinline style="width:100%; border-radius:10px; background:#000"></video>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label class="small">起點（秒）</label>
+        <input type="number" id="trimStart" min="0" step="0.5" value="0">
+      </div>
+      <div>
+        <label class="small">終點（秒）</label>
+        <input type="number" id="trimEnd" min="0" step="0.5" value="0">
+      </div>
+    </div>
+    <div class="btnrow" style="margin-top:8px">
+      <button class="btn mini secondary" id="btnSetStart">⏱ 起點＝目前位置</button>
+      <button class="btn mini secondary" id="btnSetEnd">⏱ 終點＝目前位置</button>
+    </div>
+    <label class="small">輸出大小上限</label>
+    <select id="videoSizeLimit">
+      <option value="10">10 MB</option>
+      <option value="20" selected>20 MB</option>
+      <option value="28">28 MB（30MB 系統上限保守值）</option>
+    </select>
+    <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="wmVideoOn" style="width:auto"> 加上地點浮水印（行車紀錄器通常已有時間戳，可不勾）
+    </label>
+    <button class="btn primary" id="btnProcessVideo">✂️ 剪輯並壓縮</button>
+    <div id="videoProgWrap" style="display:none; margin-top:10px">
+      <progress id="videoProg" max="100" value="0"></progress>
+      <div class="hint" id="videoProgText">處理中…請保持此頁面開啟，勿切換 App。</div>
+    </div>
+  </div>
+  <div id="videoResults"></div>
+</section>
+
+<!-- ========== 分頁 4：資訊 ========== -->
+<section class="tab" id="tab-info">
+  <div class="card">
+    <h2>事後檢舉文字範本</h2>
+    <p class="hint" style="margin-top:0">要用官方網站/APP 事後檢舉時，複製這段貼上「違規事實」欄位。內容自動帶入快報頁資料。</p>
+    <textarea id="reportBody"></textarea>
+    <button class="btn secondary" id="btnCopyReport">📋 複製範本</button>
+  </div>
+
+  <div class="card">
+    <h2>檢舉管道</h2>
+    <div class="linklist" id="linkList">
+      <a href="https://fixtw.com" target="_blank" rel="noopener">⚡ FixTW 自動化檢舉（免費，代填各縣市系統）</a>
+      <a href="https://prsweb.tcpd.gov.tw/" target="_blank" rel="noopener">台北市 交通違規檢舉專區</a>
+      <a href="https://trspweb.ntpd.gov.tw/" target="_blank" rel="noopener">新北市 交通違規便民服務網</a>
+      <a href="https://tvrweb.typd.gov.tw:3444/ttpb/d0101" target="_blank" rel="noopener">桃園市 交通違規檢舉專區</a>
+      <a href="https://suggest.police.taichung.gov.tw/traffic/" target="_blank" rel="noopener">台中市 交通違規檢舉</a>
+      <a href="https://trafficserve.tnpd.gov.tw/" target="_blank" rel="noopener">台南市 交通違規便民服務網</a>
+      <a href="https://policemail.kcg.gov.tw/" target="_blank" rel="noopener">高雄市 警政信箱（交通違規檢舉）</a>
+      <a href="https://www.google.com/maps" target="_blank" rel="noopener">🗺 Google 地圖（確認門牌地址）</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>重要規則小抄</h2>
+    <div class="big-note">🚨 <b>紅線、黃線違停「不能」事後檢舉</b>（2022 修法限縮）。遇到請直接用快報頁打 110 或傳簡訊，警察到場才能開單。</div>
+    <ul class="tight">
+      <li><b>可以</b>事後檢舉的違停：人行道、行人穿越道、交岔路口 10 公尺內、公車站 10 公尺內、消防栓 5 公尺內、身障車位、併排停車。</li>
+      <li>檢舉期限：違規行為<b>結束起 7 天內</b>要送件，逾期不受理。</li>
+      <li>證據要素：看得出<b>地點</b>（門牌/路口路牌）、<b>時間</b>、<b>車牌</b>、<b>違規事實</b>。錄 10–20 秒影片一次搞定最穩。</li>
+      <li>檢舉須實名（姓名＋身分證＋電話），但警方依法<b>不得洩漏</b>檢舉人身分，車主不會知道是誰。</li>
+      <li>安全第一：別站在車旁與車主對峙，遠距拍攝或直接用簡訊無聲報案。</li>
+    </ul>
+    <details>
+      <summary>加入主畫面（變成 App）</summary>
+      <ul class="tight">
+        <li><b>iPhone</b>：Safari 開啟本頁 → 分享 → 「加入主畫面」。</li>
+        <li><b>Android</b>：Chrome 開啟本頁 → 右上角 ⋮ → 「安裝應用程式」。</li>
+      </ul>
+    </details>
+  </div>
+</section>
+
+<!-- ========== 設定 ========== -->
+<section class="tab" id="tab-settings">
+  <div class="card">
+    <h2>設定</h2>
+    <label class="small">簡訊報案號碼（全國共用 0911-510-110，一般不需修改）</label>
+    <input type="text" id="setSmsNumber" inputmode="tel">
+    <button class="btn secondary" id="btnSaveSettings">儲存</button>
+    <div class="hint">所有資料只儲存在你手機的瀏覽器中，不會上傳到任何伺服器。定位轉地址使用 OpenStreetMap Nominatim 公開服務（只傳送座標）。</div>
+  </div>
+</section>
+</main>
+
+<nav>
+  <button data-tab="tab-sms" class="on"><span class="ico">🚨</span>快報</button>
+  <button data-tab="tab-photo"><span class="ico">🖼</span>照片</button>
+  <button data-tab="tab-video"><span class="ico">🎬</span>影片</button>
+  <button data-tab="tab-info"><span class="ico">📋</span>檢舉</button>
+</nav>
+
+<div class="copied-toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+/* ---------- 設定 ---------- */
+const SETTINGS_KEY = "wtkb.settings";
+let settings = { smsNumber: "0911510110" };
+try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch(e){}
+$("setSmsNumber").value = settings.smsNumber;
+$("btnSaveSettings").onclick = () => {
+  settings.smsNumber = $("setSmsNumber").value.replace(/[^0-9+]/g, "") || "0911510110";
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  toast("已儲存");
+  switchTab("tab-sms");
+};
+$("btnSettings").onclick = () => switchTab("tab-settings");
+
+/* ---------- 分頁 ---------- */
+function switchTab(id){
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("active", s.id === id));
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === id));
+  if (id === "tab-photo" && !$("wmPlace").value) $("wmPlace").value = $("address").value;
+  if (id === "tab-info") buildReportBody();
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+
+/* ---------- toast ---------- */
+let toastTimer;
+function toast(msg){
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+/* ---------- 定位 + 轉地址 ---------- */
+let lastPos = null;
+function locate(){
+  const st = $("geoStatus");
+  if (!navigator.geolocation){ st.textContent = "此瀏覽器不支援定位"; st.className = "status err"; return; }
+  st.textContent = "定位中…"; st.className = "status";
+  navigator.geolocation.getCurrentPosition(async pos => {
+    lastPos = pos.coords;
+    const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+    st.textContent = `已定位（誤差約 ${Math.round(accuracy)} 公尺）`;
+    st.className = "status ok";
+    $("geoDetail").innerHTML =
+      `座標 ${lat.toFixed(6)}, ${lon.toFixed(6)} ｜ <a href="https://maps.google.com/?q=${lat},${lon}" target="_blank" rel="noopener">在地圖確認</a>`;
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&accept-language=zh-TW`,
+        { headers: { "Accept": "application/json" } });
+      const j = await r.json();
+      const a = j.address || {};
+      const city = a.city || a.county || "";
+      const dist = a.suburb || a.city_district || a.town || a.village || "";
+      const road = a.road || "";
+      const no = a.house_number ? a.house_number.replace(/號?$/, "號") : "";
+      let addr = [city, dist, road, no].join("");
+      if (!road) addr = j.display_name || addr;
+      if (addr){
+        $("address").value = addr + (no ? "前" : "");
+        buildSms();
+      }
+    } catch(e){
+      st.textContent = "已定位，但轉地址失敗，請手動輸入或看門牌";
+      st.className = "status err";
+    }
+  }, err => {
+    st.textContent = "定位失敗：" + (err.code === 1 ? "請允許位置權限" : err.message);
+    st.className = "status err";
+  }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+}
+$("btnLocate").onclick = locate;
+
+/* ---------- chips ---------- */
+function bindChips(containerId, onChange){
+  const box = $(containerId);
+  box.addEventListener("click", e => {
+    const c = e.target.closest(".chip");
+    if (!c) return;
+    box.querySelectorAll(".chip").forEach(x => x.classList.remove("on"));
+    c.classList.add("on");
+    onChange(c.dataset.v);
+  });
+}
+let vehicle = "自小客車", violation = "併排停車";
+bindChips("vehicleChips", v => { vehicle = v; buildSms(); });
+bindChips("violationChips", v => {
+  const other = $("violationOther");
+  if (v === "__other__"){ other.style.display = "block"; violation = other.value || "違規停車"; other.focus(); }
+  else { other.style.display = "none"; violation = v; }
+  buildSms();
+});
+$("violationOther").addEventListener("input", e => { violation = e.target.value || "違規停車"; buildSms(); });
+
+/* ---------- 簡訊組合 ---------- */
+let smsEdited = false;
+$("smsBody").addEventListener("input", () => smsEdited = true);
+["address","plate"].forEach(id => $(id).addEventListener("input", buildSms));
+
+function nowHM(){
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+function buildSms(){
+  if (smsEdited) return;
+  const addr = $("address").value.trim() || "（地址）";
+  const plate = $("plate").value.trim().toUpperCase() || "（車牌）";
+  $("smsBody").value = `${nowHM()}，在${addr}，車牌 ${plate} 之${vehicle}${violation}，阻礙交通，請派員處理。`;
+}
+buildSms();
+setInterval(() => { if (!smsEdited) buildSms(); }, 30000);
+
+$("btnSms").onclick = () => {
+  const body = encodeURIComponent($("smsBody").value);
+  const sep = IS_IOS ? "&" : "?";
+  location.href = `sms:${settings.smsNumber}${sep}body=${body}`;
+};
+$("btnCall").onclick = () => { location.href = "tel:110"; };
+$("btnCopy").onclick = () => copyText($("smsBody").value);
+
+async function copyText(text){
+  try { await navigator.clipboard.writeText(text); toast("已複製"); }
+  catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove(); toast("已複製");
+  }
+}
+
+/* ---------- 檢舉範本 ---------- */
+function buildReportBody(){
+  const d = new Date();
+  const date = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}`;
+  const addr = $("address").value.trim() || "（地址）";
+  const plate = $("plate").value.trim().toUpperCase() || "（車牌）";
+  $("reportBody").value =
+`違規時間：${date} ${nowHM()}
+違規地點：${addr}
+車牌號碼：${plate}（${vehicle}）
+違規事實：${violation}，如附件照片/影片所示。
+檢附證據可清楚辨識車牌、地點與違規事實，請依法舉發。`;
+}
+$("btnCopyReport").onclick = () => copyText($("reportBody").value);
+
+/* ---------- EXIF 解析（僅取 DateTimeOriginal） ---------- */
+function readExifDate(buf){
+  try {
+    const v = new DataView(buf);
+    if (v.getUint16(0) !== 0xFFD8) return null;           // 不是 JPEG
+    let off = 2;
+    while (off + 4 < v.byteLength){
+      if (v.getUint8(off) !== 0xFF) break;
+      const marker = v.getUint8(off + 1);
+      const size = v.getUint16(off + 2);
+      if (marker === 0xE1){                                // APP1
+        const p = off + 4;
+        if (v.getUint32(p) === 0x45786966){                // "Exif"
+          const tiff = p + 6;
+          const little = v.getUint16(tiff) === 0x4949;
+          const g16 = o => v.getUint16(o, little), g32 = o => v.getUint32(o, little);
+          const ifd0 = tiff + g32(tiff + 4);
+          const n0 = g16(ifd0);
+          let exifIfd = 0;
+          for (let i = 0; i < n0; i++){
+            const e = ifd0 + 2 + i * 12;
+            if (g16(e) === 0x8769) exifIfd = tiff + g32(e + 8);
+          }
+          if (exifIfd){
+            const n1 = g16(exifIfd);
+            for (let i = 0; i < n1; i++){
+              const e = exifIfd + 2 + i * 12;
+              if (g16(e) === 0x9003){                      // DateTimeOriginal
+                const strOff = tiff + g32(e + 8);
+                let s = "";
+                for (let k = 0; k < 19; k++) s += String.fromCharCode(v.getUint8(strOff + k));
+                const m = s.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+                if (m) return new Date(+m[1], m[2]-1, +m[3], +m[4], +m[5], +m[6]);
+              }
+            }
+          }
+        }
+      }
+      if (marker === 0xDA) break;                          // 影像資料開始
+      off += 2 + size;
+    }
+  } catch(e){}
+  return null;
+}
+
+/* ---------- 照片浮水印＋壓縮 ---------- */
+$("btnPickPhoto").onclick = () => $("photoInput").click();
+$("photoInput").addEventListener("change", async e => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  for (const f of files) await processPhoto(f);
+});
+
+function fmtDateTime(d){
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")} ` +
+         `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
+}
+
+async function processPhoto(file){
+  const limitMB = parseFloat($("photoSizeLimit").value);
+  const buf = await file.slice(0, 256 * 1024).arrayBuffer();
+  const shot = readExifDate(buf) || new Date(file.lastModified);
+  const place = $("wmPlace").value.trim();
+
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });
+
+  let W = img.naturalWidth, H = img.naturalHeight;
+  const maxDim = 2560;
+  if (Math.max(W, H) > maxDim){ const r = maxDim / Math.max(W, H); W = Math.round(W*r); H = Math.round(H*r); }
+
+  const canvas = document.createElement("canvas");
+  const draw = (w, h) => {
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+    // 浮水印列
+    const fs = Math.max(16, Math.round(w * 0.028));
+    const lines = [ `📅 ${fmtDateTime(shot)}` ];
+    if (place) lines.push(`📍 ${place}`);
+    const pad = Math.round(fs * 0.5);
+    const barH = lines.length * (fs * 1.35) + pad * 2;
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0, h - barH, w, barH);
+    ctx.fillStyle = "#fff";
+    ctx.font = `600 ${fs}px -apple-system,'PingFang TC','Noto Sans TC',sans-serif`;
+    ctx.textBaseline = "top";
+    lines.forEach((ln, i) => ctx.fillText(ln, pad, h - barH + pad + i * fs * 1.35, w - pad * 2));
+    return ctx;
+  };
+  draw(W, H);
+
+  // 逐步降質/縮圖直到符合大小
+  let blob = null, q = 0.92, scale = 1;
+  for (let i = 0; i < 10; i++){
+    blob = await new Promise(ok => canvas.toBlob(ok, "image/jpeg", q));
+    if (blob.size <= limitMB * 1024 * 1024) break;
+    if (q > 0.55) q -= 0.12;
+    else { scale *= 0.8; draw(Math.round(W*scale), Math.round(H*scale)); }
+  }
+  URL.revokeObjectURL(url);
+
+  const name = `違停證據_${fmtDateTime(shot).replace(/[\/: ]/g, "-")}.jpg`;
+  addResult($("photoResults"), blob, name, "image",
+    `拍攝時間 ${fmtDateTime(shot)} ｜ 輸出 ${(blob.size/1024/1024).toFixed(2)} MB`);
+}
+
+/* ---------- 結果卡片（下載 / 分享） ---------- */
+function addResult(container, blob, filename, kind, metaText){
+  const url = URL.createObjectURL(blob);
+  const item = document.createElement("div");
+  item.className = "result-item";
+  const media = kind === "image"
+    ? `<img src="${url}" alt="">`
+    : `<video src="${url}" controls playsinline></video>`;
+  item.innerHTML = `${media}<div class="bar">
+      <div class="meta">${metaText}</div>
+      <div class="btnrow">
+        <button class="btn secondary act-dl">⬇️ 下載</button>
+        <button class="btn secondary act-share">📤 分享/儲存</button>
+      </div></div>`;
+  item.querySelector(".act-dl").onclick = () => {
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  item.querySelector(".act-share").onclick = async () => {
+    const f = new File([blob], filename, { type: blob.type });
+    if (navigator.canShare && navigator.canShare({ files: [f] })){
+      try { await navigator.share({ files: [f] }); } catch(e){}
+    } else toast("此瀏覽器不支援分享，請用下載");
+  };
+  container.prepend(item);
+}
+
+/* ---------- 影片剪輯＋壓縮 ---------- */
+let videoFile = null;
+$("btnPickVideo").onclick = () => $("videoInput").click();
+$("videoInput").addEventListener("change", e => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  videoFile = f;
+  const v = $("srcVideo");
+  v.src = URL.createObjectURL(f);
+  v.onloadedmetadata = () => {
+    $("videoEditor").style.display = "block";
+    $("trimStart").value = 0;
+    $("trimEnd").value = Math.min(v.duration, 20).toFixed(1);
+    $("trimEnd").max = v.duration.toFixed(1);
+  };
+});
+$("btnSetStart").onclick = () => { $("trimStart").value = $("srcVideo").currentTime.toFixed(1); };
+$("btnSetEnd").onclick = () => { $("trimEnd").value = $("srcVideo").currentTime.toFixed(1); };
+
+function pickMime(){
+  const cands = ["video/mp4;codecs=avc1", "video/mp4",
+                 "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+  for (const m of cands)
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  return null;
+}
+
+$("btnProcessVideo").onclick = async () => {
+  const v = $("srcVideo");
+  const start = parseFloat($("trimStart").value) || 0;
+  const end = Math.min(parseFloat($("trimEnd").value) || v.duration, v.duration);
+  const dur = end - start;
+  if (dur <= 0){ toast("終點必須大於起點"); return; }
+  if (dur > 60 && !confirm(`片段長 ${Math.round(dur)} 秒，官方系統多限 30 秒內，確定繼續？`)) return;
+
+  const mime = pickMime();
+  if (!mime || !("captureStream" in HTMLCanvasElement.prototype)){
+    toast("此瀏覽器不支援影片轉檔，請改用照片或電腦處理"); return;
+  }
+
+  const limitMB = parseFloat($("videoSizeLimit").value);
+  const bitrate = Math.min(8e6, Math.max(6e5, Math.floor(limitMB * 8 * 1024 * 1024 / dur * 0.85)));
+
+  const canvas = document.createElement("canvas");
+  const scale = Math.min(1, 1280 / v.videoWidth);
+  canvas.width = Math.round(v.videoWidth * scale);
+  canvas.height = Math.round(v.videoHeight * scale);
+  const ctx = canvas.getContext("2d");
+  const place = $("wmVideoOn").checked ? ($("wmPlace").value.trim() || $("address").value.trim()) : "";
+
+  const stream = canvas.captureStream(30);
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
+  const chunks = [];
+  rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  const done = new Promise(ok => rec.onstop = ok);
+
+  $("videoProgWrap").style.display = "block";
+  $("btnProcessVideo").disabled = true;
+  v.muted = true;
+  v.currentTime = start;
+  await new Promise(ok => v.onseeked = ok);
+
+  let raf;
+  const paint = () => {
+    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+    if (place){
+      const fs = Math.max(14, Math.round(canvas.width * 0.025));
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(0, canvas.height - fs * 2, canvas.width, fs * 2);
+      ctx.fillStyle = "#fff";
+      ctx.font = `600 ${fs}px sans-serif`;
+      ctx.textBaseline = "middle";
+      ctx.fillText(`📍 ${place}`, fs * 0.5, canvas.height - fs, canvas.width - fs);
+    }
+    const p = Math.min(100, (v.currentTime - start) / dur * 100);
+    $("videoProg").value = p;
+    $("videoProgText").textContent = `處理中 ${Math.round(p)}%…請保持此頁面開啟，勿切換 App。`;
+    if (v.currentTime >= end || v.ended){ finish(); return; }
+    raf = requestAnimationFrame(paint);
+  };
+  const finish = async () => {
+    cancelAnimationFrame(raf);
+    v.pause();
+    rec.stop();
+    await done;
+    const blob = new Blob(chunks, { type: mime.split(";")[0] });
+    const ext = mime.includes("mp4") ? "mp4" : "webm";
+    const name = `違停證據_${Date.now()}.${ext}`;
+    addResult($("videoResults"), blob, name, "video",
+      `片段 ${start.toFixed(1)}s → ${end.toFixed(1)}s（${dur.toFixed(1)} 秒）｜ 輸出 ${(blob.size/1024/1024).toFixed(2)} MB（${ext}，無聲）`);
+    $("videoProgWrap").style.display = "none";
+    $("btnProcessVideo").disabled = false;
+    if (ext === "webm") toast("輸出為 webm 格式；若官方系統不收，改用 iPhone/相簿轉存 mp4");
+  };
+  rec.start(250);
+  try { await v.play(); } catch(e){ finish(); return; }
+  raf = requestAnimationFrame(paint);
+};
+
+/* ---------- 啟動 ---------- */
+locate();
+if ("serviceWorker" in navigator)
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
